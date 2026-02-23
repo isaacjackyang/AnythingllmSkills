@@ -7,6 +7,9 @@
 - **可觀測輸出**：統一 `ok/action/data(or error)/audit`
 - **最小可重現流程**：plan → execute → report
 
+- **一致命名**：plan 輸出欄位需和後續 block 引用完全一致，避免 hidden mismatch
+- **審計欄位**：flow logs 內加入 `audit:{flow,version}`，方便追蹤與 debug
+
 ## Skills
 
 ### 1) `ps_run_safe`

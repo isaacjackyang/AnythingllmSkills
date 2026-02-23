@@ -7,7 +7,7 @@
       "id": "plan",
       "type": "llm_instruction",
       "config": {
-        "instruction": "把任務拆成 JSON，格式固定為 {goal:string, steps:[{id,action,target,expected}], output_schema:{screenshot_path,dom_summary,result_json}}。"
+        "instruction": "把任務拆成 JSON，格式固定為 {goal:string, steps:[{id,action,target,expected}], output_schema:{screenshot_path,dom_summary,result_json}}。欄位名稱需與後續 block 引用完全一致。"
       }
     },
     {
@@ -27,7 +27,7 @@
         "input": {
           "action": "write_text",
           "path": "logs/browser_task_result.json",
-          "content": "{{ {plan: plan.output, execution: browser_exec.output} | json}}"
+          "content": "{{ {plan: plan.output, execution: browser_exec.output, audit: {flow: 'BrowserTaskFlow', version: '0.2.0'}} | json }}"
         }
       }
     }

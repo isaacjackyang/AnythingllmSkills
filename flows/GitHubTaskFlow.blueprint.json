@@ -7,7 +7,7 @@
       "id": "plan",
       "type": "llm_instruction",
       "config": {
-        "instruction": "產生 JSON 計畫：{owner,repo,branch,pr:{title,body,head,base},checks:[...]}。"
+        "instruction": "產生 JSON 計畫：{owner,repo,pr:{title,body,head,base},checks:[...]}。欄位名稱需與後續 block 引用完全一致。"
       }
     },
     {
@@ -49,7 +49,7 @@
         "input": {
           "action": "write_text",
           "path": "logs/github_task_result.json",
-          "content": "{{ {plan: plan.output, issues: list_issues.output, pr: create_pr.output} | json}}"
+          "content": "{{ {plan: plan.output, issues: list_issues.output, pr: create_pr.output, audit: {flow: 'GitHubTaskFlow', version: '0.2.0'}} | json }}"
         }
       }
     }
