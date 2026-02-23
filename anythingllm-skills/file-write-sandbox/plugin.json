@@ -1,30 +1,31 @@
 {
   "name": "file_write_sandbox",
-  "version": "0.1.0",
-  "description": "Write files only inside C:\\agent_sandbox for safe agent output persistence.",
+  "version": "0.2.0",
+  "description": "OpenClaw-like sandboxed file writer with strict action contract and audit output.",
   "author": "AnythingllmSkills",
   "entrypoint": "handler.js",
   "parameters": {
     "type": "object",
     "properties": {
+      "action": {
+        "type": "string",
+        "enum": ["write_text", "append_text"],
+        "description": "Action selector for write mode."
+      },
       "path": {
         "type": "string",
-        "description": "Absolute or relative path under C:\\agent_sandbox"
+        "description": "Absolute or relative file path under C:\\agent_sandbox."
       },
       "content": {
         "type": "string",
-        "description": "Text content to write"
-      },
-      "append": {
-        "type": "boolean",
-        "description": "Append to existing file if true"
+        "description": "Text content to write."
       },
       "encoding": {
         "type": "string",
-        "description": "Encoding, default utf8"
+        "description": "Text encoding. Default utf8."
       }
     },
-    "required": ["path", "content"],
+    "required": ["action", "path", "content"],
     "additionalProperties": false
   }
 }

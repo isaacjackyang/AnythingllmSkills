@@ -1,26 +1,31 @@
 {
   "name": "file_read_sandbox",
-  "version": "0.1.0",
-  "description": "Read files only inside C:\\agent_sandbox for safe agent file access.",
+  "version": "0.2.0",
+  "description": "OpenClaw-like sandboxed file reader with strict action contract and audit output.",
   "author": "AnythingllmSkills",
   "entrypoint": "handler.js",
   "parameters": {
     "type": "object",
     "properties": {
+      "action": {
+        "type": "string",
+        "enum": ["read_text"],
+        "description": "Action selector. Only read_text is supported."
+      },
       "path": {
         "type": "string",
-        "description": "Absolute or relative path under C:\\agent_sandbox"
+        "description": "Absolute or relative file path under C:\\agent_sandbox."
       },
       "encoding": {
         "type": "string",
-        "description": "File encoding, default utf8"
+        "description": "Text encoding. Default utf8."
       },
       "maxBytes": {
         "type": "integer",
-        "description": "Maximum bytes to read, default 65536"
+        "description": "Max bytes to read. Default 65536, max 1048576."
       }
     },
-    "required": ["path"],
+    "required": ["action", "path"],
     "additionalProperties": false
   }
 }

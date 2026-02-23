@@ -3,77 +3,76 @@ const fs = require('fs');
 
 const ALLOWLIST = {
   git: {
-    args: [/^[a-zA-Z0-9._\/-]+$/, /^-{1,2}[a-zA-Z0-9._-]+$/, /^@[a-zA-Z0-9._\/-]+$/],
+    argPatterns: [/^[a-zA-Z0-9._/:=@+-]+$/],
     blockedSubcommands: ['credential', 'config', 'daemon']
   },
-  node: {
-    args: [/^[a-zA-Z0-9._\/-]+$/, /^-{1,2}[a-zA-Z0-9._-]+$/]
-  },
-  python: {
-    args: [/^[a-zA-Z0-9._\/-]+$/, /^-{1,2}[a-zA-Z0-9._-]+$/]
-  },
-  npm: {
-    args: [/^[a-zA-Z0-9._\/-]+$/, /^-{1,2}[a-zA-Z0-9._-]+$/]
-  },
-  pnpm: {
-    args: [/^[a-zA-Z0-9._\/-]+$/, /^-{1,2}[a-zA-Z0-9._-]+$/]
-  }
+  node: { argPatterns: [/^[a-zA-Z0-9._/:=@+-]+$/] },
+  python: { argPatterns: [/^[a-zA-Z0-9._/:=@+-]+$/] },
+  npm: { argPatterns: [/^[a-zA-Z0-9._/:=@+-]+$/] },
+  pnpm: { argPatterns: [/^[a-zA-Z0-9._/:=@+-]+$/] }
 };
 
-const BLOCKED_TOKENS = /[;&|`><]/;
+const BLOCKED_TOKENS = /[;&|`><$(){}!]/;
 
-function isAllowedArg(program, arg) {
-  const rules = ALLOWLIST[program]?.args || [];
-  return rules.some((rule) => rule.test(arg));
+function nowIso() {
+  return new Date().toISOString();
 }
 
-function validate(program, args) {
-  if (!ALLOWLIST[program]) {
-    return `Program is not allowlisted: ${program}`;
+function fail(action, message, detail = {}) {
+  return {
+    ok: false,
+    action,
+    error: { message, ...detail },
+    audit: { timestamp: nowIso() }
+  };
+}
+
+function pass(action, data, audit = {}) {
+  return {
+    ok: true,
+    action,
+    data,
+    audit: { timestamp: nowIso(), ...audit }
+  };
+}
+
+function validateCommand(command, args) {
+  const policy = ALLOWLIST[command];
+  if (!policy) return `Command is not allowlisted: ${command}`;
+
+  if (args.length > 0 && policy.blockedSubcommands?.includes(args[0])) {
+    return `Subcommand is blocked: ${args[0]}`;
   }
 
   for (const arg of args) {
-    if (BLOCKED_TOKENS.test(arg)) {
-      return `Disallowed shell token in arg: ${arg}`;
+    if (!arg) return 'Empty argument is not allowed';
+    if (BLOCKED_TOKENS.test(arg)) return `Disallowed token in arg: ${arg}`;
+    if (!policy.argPatterns.some((pattern) => pattern.test(arg))) {
+      return `Arg rejected by policy: ${arg}`;
     }
-
-    if (!isAllowedArg(program, arg)) {
-      return `Arg rejected by allowlist policy: ${arg}`;
-    }
-  }
-
-  if (args.length > 0 && ALLOWLIST[program].blockedSubcommands?.includes(args[0])) {
-    return `Subcommand is blocked: ${args[0]}`;
   }
 
   return null;
 }
 
 module.exports = async function execute(params = {}) {
-  const program = String(params.program || '').trim().toLowerCase();
-  const args = Array.isArray(params.args) ? params.args.map((x) => String(x || '')) : [];
+  const action = String(params.action || '').trim();
+  if (action !== 'run') return fail(action || 'unknown', 'Unsupported action. Only run is available.');
+
+  const command = String(params.command || '').trim().toLowerCase();
+  const args = Array.isArray(params.args) ? params.args.map((x) => String(x || '').trim()) : [];
   const cwd = params.cwd ? String(params.cwd).trim() : process.cwd();
   const timeoutMs = Math.max(1000, Math.min(Number(params.timeoutMs || 15000), 120000));
 
-  if (!program) {
-    return { ok: false, message: 'Missing required parameter: program' };
-  }
+  if (!command) return fail(action, 'Missing required parameter: command');
+  if (!fs.existsSync(cwd)) return fail(action, `cwd does not exist: ${cwd}`);
 
-  if (!fs.existsSync(cwd)) {
-    return { ok: false, message: `cwd does not exist: ${cwd}` };
-  }
-
-  const validationError = validate(program, args);
-  if (validationError) {
-    return { ok: false, message: validationError, program, args };
-  }
+  const validationError = validateCommand(command, args);
+  if (validationError) return fail(action, validationError, { command, args });
 
   return new Promise((resolve) => {
-    const child = spawn(program, args, {
-      cwd,
-      shell: false,
-      windowsHide: true
-    });
+    const startedAt = Date.now();
+    const child = spawn(command, args, { cwd, shell: false, windowsHide: true });
 
     let stdout = '';
     let stderr = '';
@@ -94,22 +93,40 @@ module.exports = async function execute(params = {}) {
 
     child.on('error', (error) => {
       clearTimeout(timer);
-      resolve({ ok: false, program, args, cwd, timedOut, message: error.message, stdout, stderr });
+      resolve(
+        fail(action, 'Process spawn failed.', {
+          command,
+          args,
+          cwd,
+          reason: error.message
+        })
+      );
     });
 
-    child.on('close', (code) => {
+    child.on('close', (exitCode) => {
       clearTimeout(timer);
-      resolve({
-        ok: !timedOut && code === 0,
-        program,
+      const durationMs = Date.now() - startedAt;
+      const data = {
+        command,
         args,
         cwd,
+        exitCode,
         timedOut,
-        exitCode: code,
-        stdout: stdout.slice(0, 10000),
-        stderr: stderr.slice(0, 10000),
-        message: timedOut ? 'Command timed out.' : code === 0 ? 'Command completed.' : 'Command failed.'
-      });
+        stdout: stdout.slice(0, 12000),
+        stderr: stderr.slice(0, 12000)
+      };
+
+      if (timedOut) {
+        resolve(fail(action, 'Command timed out.', { ...data, timeoutMs }));
+        return;
+      }
+
+      if (exitCode !== 0) {
+        resolve(fail(action, 'Command failed.', data));
+        return;
+      }
+
+      resolve(pass(action, data, { durationMs }));
     });
   });
 };

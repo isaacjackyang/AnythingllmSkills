@@ -1,13 +1,13 @@
 {
   "name": "BrowserTaskFlow",
-  "version": "0.1.0",
-  "description": "MVP flow: plan browser steps, execute with MCP browser tool, persist evidence in sandbox.",
+  "version": "0.2.0",
+  "description": "OpenClaw-like browser workflow: deterministic plan -> browser execution -> structured evidence log.",
   "blocks": [
     {
       "id": "plan",
       "type": "llm_instruction",
       "config": {
-        "instruction": "將任務拆成可執行步驟，輸出 JSON: {goal, steps:[...], expectedEvidence:[...]}。"
+        "instruction": "把任務拆成 JSON，格式固定為 {goal:string, steps:[{id,action,target,expected}], output_schema:{screenshot_path,dom_summary,result_json}}。"
       }
     },
     {
@@ -16,7 +16,7 @@
       "config": {
         "server": "browser",
         "tool": "run_playwright_script",
-        "inputTemplate": "依照 steps 逐步執行，回傳 screenshot_path、dom_summary、result_json。"
+        "inputTemplate": "依照 plan.steps 逐步執行並回傳 output_schema 對應欄位。"
       }
     },
     {
@@ -25,9 +25,9 @@
       "config": {
         "skill": "file_write_sandbox",
         "input": {
+          "action": "write_text",
           "path": "logs/browser_task_result.json",
-          "content": "{{browser_exec.output | json}}",
-          "append": false
+          "content": "{{ {plan: plan.output, execution: browser_exec.output} | json}}"
         }
       }
     }

@@ -1,26 +1,47 @@
 {
   "name": "git_api",
-  "version": "0.1.0",
-  "description": "Minimal GitHub REST API wrapper using a centralized token from env.",
+  "version": "0.2.0",
+  "description": "OpenClaw-like GitHub task skill with explicit actions, endpoint guardrails, and centralized token use.",
   "author": "AnythingllmSkills",
   "entrypoint": "handler.js",
   "parameters": {
     "type": "object",
     "properties": {
-      "method": {
+      "action": {
         "type": "string",
-        "description": "HTTP method, default GET"
+        "enum": ["list_issues", "create_pull_request", "get_user"],
+        "description": "High-level GitHub action."
       },
-      "endpoint": {
+      "owner": {
         "type": "string",
-        "description": "GitHub API endpoint path, e.g. /repos/owner/repo/issues"
+        "description": "Repository owner for repo-scoped actions."
+      },
+      "repo": {
+        "type": "string",
+        "description": "Repository name for repo-scoped actions."
+      },
+      "state": {
+        "type": "string",
+        "description": "Issue state for list_issues, default open."
+      },
+      "title": {
+        "type": "string",
+        "description": "PR title for create_pull_request."
       },
       "body": {
-        "type": "object",
-        "description": "Optional JSON payload"
+        "type": "string",
+        "description": "PR body for create_pull_request."
+      },
+      "head": {
+        "type": "string",
+        "description": "PR head branch for create_pull_request."
+      },
+      "base": {
+        "type": "string",
+        "description": "PR base branch for create_pull_request, default main."
       }
     },
-    "required": ["endpoint"],
+    "required": ["action"],
     "additionalProperties": false
   }
 }

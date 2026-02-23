@@ -3,13 +3,26 @@ const path = require('path');
 
 const SANDBOX_ROOT = 'C:\\agent_sandbox';
 
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function fail(action, message, detail = {}) {
+  return { ok: false, action, error: { message, ...detail }, audit: { timestamp: nowIso() } };
+}
+
+function pass(action, data) {
+  return { ok: true, action, data, audit: { timestamp: nowIso() } };
+}
+
 function resolveInSandbox(inputPath) {
   const candidate = path.isAbsolute(inputPath)
     ? path.normalize(inputPath)
     : path.normalize(path.join(SANDBOX_ROOT, inputPath));
 
-  const root = path.normalize(SANDBOX_ROOT + path.sep);
-  if (!candidate.toLowerCase().startsWith(root.toLowerCase()) && candidate.toLowerCase() !== SANDBOX_ROOT.toLowerCase()) {
+  const root = path.normalize(SANDBOX_ROOT + path.sep).toLowerCase();
+  const lowerCandidate = candidate.toLowerCase();
+  if (!lowerCandidate.startsWith(root) && lowerCandidate !== SANDBOX_ROOT.toLowerCase()) {
     return { ok: false, message: `Path escapes sandbox: ${inputPath}` };
   }
 
@@ -17,33 +30,32 @@ function resolveInSandbox(inputPath) {
 }
 
 module.exports = async function execute(params = {}) {
-  const requestedPath = String(params.path || '').trim();
-  const content = String(params.content ?? '');
-  const append = Boolean(params.append || false);
-  const encoding = String(params.encoding || 'utf8');
-
-  if (!requestedPath) {
-    return { ok: false, message: 'Missing required parameter: path' };
+  const action = String(params.action || '').trim();
+  if (!['write_text', 'append_text'].includes(action)) {
+    return fail(action || 'unknown', 'Unsupported action. Use write_text or append_text.');
   }
 
+  const requestedPath = String(params.path || '').trim();
+  const content = String(params.content ?? '');
+  const encoding = String(params.encoding || 'utf8');
+
+  if (!requestedPath) return fail(action, 'Missing required parameter: path');
+
   const resolved = resolveInSandbox(requestedPath);
-  if (!resolved.ok) return { ok: false, message: resolved.message };
+  if (!resolved.ok) return fail(action, resolved.message);
 
   const directory = path.dirname(resolved.fullPath);
   fs.mkdirSync(directory, { recursive: true });
 
-  if (append) {
+  if (action === 'append_text') {
     fs.appendFileSync(resolved.fullPath, content, { encoding });
   } else {
     fs.writeFileSync(resolved.fullPath, content, { encoding });
   }
 
-  const bytes = Buffer.byteLength(content, encoding);
-  return {
-    ok: true,
+  return pass(action, {
     path: resolved.fullPath,
-    append,
-    bytesWritten: bytes,
-    message: append ? 'Content appended.' : 'Content written.'
-  };
+    bytesWritten: Buffer.byteLength(content, encoding),
+    mode: action === 'append_text' ? 'append' : 'overwrite'
+  });
 };
