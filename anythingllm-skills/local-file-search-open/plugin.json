@@ -1,6 +1,6 @@
 {
   "name": "local-file-search-open",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": "Search files on Windows by keyword with scope options (entire machine, C:, D:, or custom path), optionally open the file location in Explorer.",
   "author": "AnythingllmSkills",
   "entrypoint": "handler.js",
@@ -13,12 +13,11 @@
       },
       "searchScope": {
         "type": "string",
-        "description": "Search scope: all (entire machine), c (C drive), d (D drive), or custom (use rootPath). Default: d",
-        "enum": ["all", "c", "d", "custom"]
+        "description": "Search scope: all (entire machine), c (C drive), d (D drive), or custom (use rootPath). Default: d"
       },
       "rootPath": {
         "type": "string",
-        "description": "Search root folder path when searchScope=custom. Default: D:\\"
+        "description": "Search root folder path when searchScope=custom. Default: first available drive (D:\\ preferred, then C:\\)"
       },
       "maxResults": {
         "type": "number",
