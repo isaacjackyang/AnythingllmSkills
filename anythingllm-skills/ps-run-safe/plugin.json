@@ -1,0 +1,36 @@
+{
+  "name": "ps_run_safe",
+  "version": "0.2.0",
+  "description": "OpenClaw-like safe PowerShell runner with strict action schema, allowlisted commands, and audit-friendly output.",
+  "author": "AnythingllmSkills",
+  "entrypoint": "handler.js",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": ["run"],
+        "description": "Action selector. Only 'run' is supported."
+      },
+      "command": {
+        "type": "string",
+        "description": "Allowlisted executable name: git, node, python, npm, pnpm."
+      },
+      "args": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Command arguments validated by token and character policy."
+      },
+      "cwd": {
+        "type": "string",
+        "description": "Optional working directory."
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "description": "Execution timeout in milliseconds. Range: 1000~120000."
+      }
+    },
+    "required": ["action", "command"],
+    "additionalProperties": false
+  }
+}

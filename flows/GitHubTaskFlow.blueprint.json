@@ -1,0 +1,57 @@
+{
+  "name": "GitHubTaskFlow",
+  "version": "0.2.0",
+  "description": "OpenClaw-like GitHub workflow: deterministic plan -> explicit API actions -> structured operation log.",
+  "blocks": [
+    {
+      "id": "plan",
+      "type": "llm_instruction",
+      "config": {
+        "instruction": "產生 JSON 計畫：{owner,repo,branch,pr:{title,body,head,base},checks:[...]}。"
+      }
+    },
+    {
+      "id": "list_issues",
+      "type": "api_call",
+      "config": {
+        "adapter": "skill",
+        "skill": "git_api",
+        "input": {
+          "action": "list_issues",
+          "owner": "{{plan.output.owner}}",
+          "repo": "{{plan.output.repo}}",
+          "state": "open"
+        }
+      }
+    },
+    {
+      "id": "create_pr",
+      "type": "api_call",
+      "config": {
+        "adapter": "skill",
+        "skill": "git_api",
+        "input": {
+          "action": "create_pull_request",
+          "owner": "{{plan.output.owner}}",
+          "repo": "{{plan.output.repo}}",
+          "title": "{{plan.output.pr.title}}",
+          "body": "{{plan.output.pr.body}}",
+          "head": "{{plan.output.pr.head}}",
+          "base": "{{plan.output.pr.base}}"
+        }
+      }
+    },
+    {
+      "id": "save_log",
+      "type": "skill",
+      "config": {
+        "skill": "file_write_sandbox",
+        "input": {
+          "action": "write_text",
+          "path": "logs/github_task_result.json",
+          "content": "{{ {plan: plan.output, issues: list_issues.output, pr: create_pr.output} | json}}"
+        }
+      }
+    }
+  ]
+}
