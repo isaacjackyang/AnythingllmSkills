@@ -1,6 +1,8 @@
 {
-  "name": "local-file-search-open",
-  "version": "1.1.2",
+
+  "name": "local_file_search_open",
+  "version": "1.1.1",
+
   "description": "Search files on Windows by keyword with scope options (entire machine, C:, D:, or custom path), optionally open the file location in Explorer.",
   "author": "AnythingllmSkills",
   "entrypoint": "handler.js",
@@ -20,7 +22,7 @@
         "description": "Search root folder path when searchScope=custom. Default: first available drive (D:\\ preferred, then C:\\)"
       },
       "maxResults": {
-        "type": "number",
+        "type": "integer",
         "description": "Maximum number of matched files to return. Default: 20"
       },
       "openExplorer": {
@@ -28,6 +30,7 @@
         "description": "If true, open Windows Explorer and select the first matched file. Default: false"
       }
     },
-    "required": ["keyword"]
+    "required": ["keyword"],
+    "additionalProperties": false
   }
 }

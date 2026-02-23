@@ -1,4 +1,4 @@
-# local-file-search-open (AnythingLLM Custom Skill)
+# local_file_search_open (AnythingLLM Custom Skill)
 
 這個 skill 讓 AnythingLLM agent 在回答 RAG 之外，還可以：
 
@@ -90,7 +90,9 @@
 1. **skill 放錯目錄層級**
    - AnythingLLM 會掃描 `custom skills` 目錄下的每個技能資料夾。
    - 正確結構應為：`.../custom-skills/local-file-search-open/plugin.json`。
-   - `plugin.json` 內的 `name` 建議與技能資料夾名稱一致（本技能為 `local-file-search-open`），避免部份版本因名稱比對失敗導致開關自動回復 Off。
+
+   - `plugin.json` 內的 `name` 使用 `local_file_search_open`（僅英數與底線），避免部份版本對 tool 名稱驗證不通過而導致開關自動回復 Off。
+
 
 2. **`plugin.json` 解析失敗或欄位缺失**
    - 至少要有 `name`、`version`、`entrypoint`、`parameters` 等基本欄位。
