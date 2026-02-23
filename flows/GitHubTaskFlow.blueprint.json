@@ -1,0 +1,56 @@
+{
+  "name": "GitHubTaskFlow",
+  "version": "0.1.0",
+  "description": "MVP flow: produce git/PR plan, execute GitHub API tasks, and persist operation logs.",
+  "blocks": [
+    {
+      "id": "plan",
+      "type": "llm_instruction",
+      "config": {
+        "instruction": "產生分支、commit、PR 計畫，輸出 JSON: {branch, commits:[...], pr:{title,body}, checks:[...]}。"
+      }
+    },
+    {
+      "id": "list_issues",
+      "type": "api_call",
+      "config": {
+        "adapter": "skill",
+        "skill": "git_api",
+        "input": {
+          "method": "GET",
+          "endpoint": "/repos/{{repo_owner}}/{{repo_name}}/issues"
+        }
+      }
+    },
+    {
+      "id": "create_pr",
+      "type": "api_call",
+      "config": {
+        "adapter": "skill",
+        "skill": "git_api",
+        "input": {
+          "method": "POST",
+          "endpoint": "/repos/{{repo_owner}}/{{repo_name}}/pulls",
+          "body": {
+            "title": "{{plan.output.pr.title}}",
+            "body": "{{plan.output.pr.body}}",
+            "head": "{{plan.output.branch}}",
+            "base": "main"
+          }
+        }
+      }
+    },
+    {
+      "id": "save_log",
+      "type": "skill",
+      "config": {
+        "skill": "file_write_sandbox",
+        "input": {
+          "path": "logs/github_task_result.json",
+          "content": "{{ {plan: plan.output, issues: list_issues.output, pr: create_pr.output} | json}}",
+          "append": false
+        }
+      }
+    }
+  ]
+}

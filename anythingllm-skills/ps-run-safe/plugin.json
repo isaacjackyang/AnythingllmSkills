@@ -1,0 +1,31 @@
+{
+  "name": "ps_run_safe",
+  "version": "0.1.0",
+  "description": "Execute a strictly allowlisted PowerShell command for controlled local automation.",
+  "author": "AnythingllmSkills",
+  "entrypoint": "handler.js",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "program": {
+        "type": "string",
+        "description": "Allowed program name: git, node, python, npm, pnpm."
+      },
+      "args": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Arguments for the selected program."
+      },
+      "cwd": {
+        "type": "string",
+        "description": "Optional working directory."
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "description": "Optional timeout in milliseconds. Default: 15000"
+      }
+    },
+    "required": ["program"],
+    "additionalProperties": false
+  }
+}

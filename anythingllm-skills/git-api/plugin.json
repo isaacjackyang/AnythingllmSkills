@@ -1,0 +1,26 @@
+{
+  "name": "git_api",
+  "version": "0.1.0",
+  "description": "Minimal GitHub REST API wrapper using a centralized token from env.",
+  "author": "AnythingllmSkills",
+  "entrypoint": "handler.js",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "method": {
+        "type": "string",
+        "description": "HTTP method, default GET"
+      },
+      "endpoint": {
+        "type": "string",
+        "description": "GitHub API endpoint path, e.g. /repos/owner/repo/issues"
+      },
+      "body": {
+        "type": "object",
+        "description": "Optional JSON payload"
+      }
+    },
+    "required": ["endpoint"],
+    "additionalProperties": false
+  }
+}

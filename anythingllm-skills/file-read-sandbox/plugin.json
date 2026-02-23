@@ -1,0 +1,26 @@
+{
+  "name": "file_read_sandbox",
+  "version": "0.1.0",
+  "description": "Read files only inside C:\\agent_sandbox for safe agent file access.",
+  "author": "AnythingllmSkills",
+  "entrypoint": "handler.js",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Absolute or relative path under C:\\agent_sandbox"
+      },
+      "encoding": {
+        "type": "string",
+        "description": "File encoding, default utf8"
+      },
+      "maxBytes": {
+        "type": "integer",
+        "description": "Maximum bytes to read, default 65536"
+      }
+    },
+    "required": ["path"],
+    "additionalProperties": false
+  }
+}

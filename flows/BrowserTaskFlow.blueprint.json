@@ -1,0 +1,35 @@
+{
+  "name": "BrowserTaskFlow",
+  "version": "0.1.0",
+  "description": "MVP flow: plan browser steps, execute with MCP browser tool, persist evidence in sandbox.",
+  "blocks": [
+    {
+      "id": "plan",
+      "type": "llm_instruction",
+      "config": {
+        "instruction": "將任務拆成可執行步驟，輸出 JSON: {goal, steps:[...], expectedEvidence:[...]}。"
+      }
+    },
+    {
+      "id": "browser_exec",
+      "type": "mcp_tool",
+      "config": {
+        "server": "browser",
+        "tool": "run_playwright_script",
+        "inputTemplate": "依照 steps 逐步執行，回傳 screenshot_path、dom_summary、result_json。"
+      }
+    },
+    {
+      "id": "save_evidence",
+      "type": "skill",
+      "config": {
+        "skill": "file_write_sandbox",
+        "input": {
+          "path": "logs/browser_task_result.json",
+          "content": "{{browser_exec.output | json}}",
+          "append": false
+        }
+      }
+    }
+  ]
+}

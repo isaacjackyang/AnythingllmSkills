@@ -1,0 +1,30 @@
+{
+  "name": "file_write_sandbox",
+  "version": "0.1.0",
+  "description": "Write files only inside C:\\agent_sandbox for safe agent output persistence.",
+  "author": "AnythingllmSkills",
+  "entrypoint": "handler.js",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Absolute or relative path under C:\\agent_sandbox"
+      },
+      "content": {
+        "type": "string",
+        "description": "Text content to write"
+      },
+      "append": {
+        "type": "boolean",
+        "description": "Append to existing file if true"
+      },
+      "encoding": {
+        "type": "string",
+        "description": "Encoding, default utf8"
+      }
+    },
+    "required": ["path", "content"],
+    "additionalProperties": false
+  }
+}
