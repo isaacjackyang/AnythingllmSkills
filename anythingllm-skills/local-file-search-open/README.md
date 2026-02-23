@@ -58,3 +58,30 @@
 - AnythingLLM 若跑在 Docker/Linux，請改成：
   - 讓 AnythingLLM 透過可存取 Windows 檔案系統的 bridge/service 呼叫，或
   - 把搜尋與開啟動作改由宿主機 API 代理。
+
+## 疑難排解：Skill 開啟後又自動變回 Off
+
+如果你在 AnythingLLM Desktop（如 v1.8.4）勾選 skill 後，畫面又跳回 Off，常見原因如下：
+
+1. **skill 放錯目錄層級**
+   - AnythingLLM 會掃描 `custom skills` 目錄下的每個技能資料夾。
+   - 正確結構應為：`.../custom-skills/local-file-search-open/plugin.json`。
+
+2. **`plugin.json` 解析失敗或欄位缺失**
+   - 至少要有 `name`、`version`、`entrypoint`、`parameters` 等基本欄位。
+   - 若 JSON 格式有錯（多逗號、編碼異常）通常會導致技能載入失敗。
+
+3. **`entrypoint` 指向錯誤**
+   - 本技能 `plugin.json` 的 `entrypoint` 是 `handler.js`，檔名必須完全一致。
+
+4. **執行環境不是 Windows 或權限受限**
+   - 這個技能會呼叫 `explorer.exe`，若不是 Windows 主機或遭安全軟體阻擋，可能異常。
+
+5. **預設路徑不存在（例如沒有 D 槽）**
+   - 本技能預設 `rootPath = D:\\`；若你的電腦沒有 D 槽，第一次呼叫就會回傳錯誤。
+   - 建議在呼叫時明確傳入存在的路徑（例如 `C:\\Users\\你的帳號\\Documents`）。
+
+6. **桌面版暫存設定異常**
+   - 偶發情況下設定檔損毀會造成 toggle 無法保存，重啟 AnythingLLM 後再重新啟用可先排查。
+
+建議排查順序：先確認資料夾結構與 `plugin.json`/`handler.js` 一致，再檢查主機是否 Windows、`rootPath` 是否存在，最後看 Desktop 日誌中的 skill 載入錯誤訊息。
