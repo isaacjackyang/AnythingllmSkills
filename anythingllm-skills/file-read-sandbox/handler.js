@@ -1,4 +1,5 @@
 const fs = require('fs');
+
 const path = require('path');
 
 const SANDBOX_ROOT = 'C:\\agent_sandbox';
@@ -56,6 +57,7 @@ module.exports = async function execute(params = {}) {
     path: resolved.fullPath,
     bytesRead: size,
     truncated: stat.size > size,
+
     content: buffer.toString(encoding)
   });
 };

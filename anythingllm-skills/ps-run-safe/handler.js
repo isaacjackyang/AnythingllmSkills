@@ -1,6 +1,7 @@
 const { spawn } = require('child_process');
 const fs = require('fs');
 
+
 const ALLOWLIST = {
   git: {
     argPatterns: [/^[a-zA-Z0-9._/:=@+-]+$/],
@@ -13,6 +14,7 @@ const ALLOWLIST = {
 };
 
 const BLOCKED_TOKENS = /[;&|`><$(){}!]/;
+
 
 function nowIso() {
   return new Date().toISOString();
@@ -36,6 +38,7 @@ function pass(action, data, audit = {}) {
   };
 }
 
+
 function validateCommand(command, args) {
   const policy = ALLOWLIST[command];
   if (!policy) return `Command is not allowlisted: ${command}`;
@@ -57,18 +60,22 @@ function validateCommand(command, args) {
 
 module.exports = async function execute(params = {}) {
   const action = String(params.action || '').trim();
+
   if (action !== 'run') return fail(action || 'unknown', 'Unsupported action. Only run is available.');
+
 
   const command = String(params.command || '').trim().toLowerCase();
   const args = Array.isArray(params.args) ? params.args.map((x) => String(x || '').trim()) : [];
   const cwd = params.cwd ? String(params.cwd).trim() : process.cwd();
   const timeoutMs = Math.max(1000, Math.min(Number(params.timeoutMs || 15000), 120000));
 
+
   if (!command) return fail(action, 'Missing required parameter: command');
   if (!fs.existsSync(cwd)) return fail(action, `cwd does not exist: ${cwd}`);
 
   const validationError = validateCommand(command, args);
   if (validationError) return fail(action, validationError, { command, args });
+
 
   return new Promise((resolve) => {
     const startedAt = Date.now();
@@ -91,6 +98,7 @@ module.exports = async function execute(params = {}) {
       stderr += String(chunk);
     });
 
+
     child.on('error', (error) => {
       clearTimeout(timer);
       resolve(
@@ -101,12 +109,15 @@ module.exports = async function execute(params = {}) {
           reason: error.message
         })
       );
+
     });
 
     child.on('close', (exitCode) => {
       clearTimeout(timer);
       const durationMs = Date.now() - startedAt;
+
       const data = {
+
         command,
         args,
         cwd,
@@ -115,6 +126,7 @@ module.exports = async function execute(params = {}) {
         stdout: stdout.slice(0, 12000),
         stderr: stderr.slice(0, 12000)
       };
+
 
       if (timedOut) {
         resolve(fail(action, 'Command timed out.', { ...data, timeoutMs }));
@@ -127,6 +139,7 @@ module.exports = async function execute(params = {}) {
       }
 
       resolve(pass(action, data, { durationMs }));
+
     });
   });
 };

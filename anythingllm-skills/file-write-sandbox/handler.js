@@ -55,6 +55,7 @@ module.exports = async function execute(params = {}) {
 
   return pass(action, {
     path: resolved.fullPath,
+
     bytesWritten: Buffer.byteLength(content, encoding),
     mode: action === 'append_text' ? 'append' : 'overwrite'
   });
