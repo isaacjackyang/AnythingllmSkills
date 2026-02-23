@@ -1,0 +1,27 @@
+{
+  "name": "local-file-search-open",
+  "description": "Search files on local Windows drive (default D:) by keyword, optionally open the file location in Explorer.",
+  "entrypoint": "index.js",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "keyword": {
+        "type": "string",
+        "description": "Keyword to search for in file names (case-insensitive)."
+      },
+      "rootPath": {
+        "type": "string",
+        "description": "Search root folder path. Default: D:\\\\"
+      },
+      "maxResults": {
+        "type": "number",
+        "description": "Maximum number of matched files to return. Default: 20"
+      },
+      "openExplorer": {
+        "type": "boolean",
+        "description": "If true, open Windows Explorer and select the first matched file. Default: false"
+      }
+    },
+    "required": ["keyword"]
+  }
+}

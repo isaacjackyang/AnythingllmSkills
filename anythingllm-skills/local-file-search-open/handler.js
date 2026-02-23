@@ -66,7 +66,7 @@ function openInExplorer(filePath) {
   });
 }
 
-module.exports = async function execute(params = {}) {
+async function execute(params = {}) {
   const keyword = String(params.keyword || '').trim();
   const rootPath = String(params.rootPath || 'D:\\').trim();
   const maxResults = normalizeLimit(params.maxResults);
@@ -107,4 +107,9 @@ module.exports = async function execute(params = {}) {
           ? 'Search complete. Attempted to open Explorer for the first match.'
           : 'Search complete.'
   };
-};
+}
+
+module.exports = execute;
+module.exports.execute = execute;
+module.exports.run = execute;
+module.exports.handler = execute;
