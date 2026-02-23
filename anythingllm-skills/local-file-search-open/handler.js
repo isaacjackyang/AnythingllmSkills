@@ -2,8 +2,57 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 
-async function walkFiles(rootPath, keyword, maxResults) {
-  const queue = [rootPath];
+const SCOPE_TO_PATH = {
+  c: 'C:\\',
+  d: 'D:\\'
+};
+
+function normalizeScope(scope) {
+  const value = String(scope || 'd').trim().toLowerCase();
+  if (['all', 'c', 'd', 'custom'].includes(value)) return value;
+  return 'd';
+}
+
+function listAvailableDriveRoots() {
+  const roots = [];
+  for (let code = 65; code <= 90; code += 1) {
+    const letter = String.fromCharCode(code);
+    const root = `${letter}:\\`;
+    if (fs.existsSync(root)) roots.push(root);
+  }
+  return roots;
+}
+
+function resolveSearchRoots(scope, rootPath) {
+  if (scope === 'all') {
+    const roots = listAvailableDriveRoots();
+    if (roots.length === 0) {
+      return { ok: false, message: 'No available drive roots found on this host.', roots: [] };
+    }
+    return { ok: true, roots };
+  }
+
+  if (scope === 'custom') {
+    const customRoot = String(rootPath || 'D:\\').trim();
+    if (!fs.existsSync(customRoot)) {
+      return { ok: false, message: `Search root does not exist: ${customRoot}`, roots: [] };
+    }
+    return { ok: true, roots: [customRoot] };
+  }
+
+  const fixedRoot = SCOPE_TO_PATH[scope] || 'D:\\';
+  if (!fs.existsSync(fixedRoot)) {
+    return {
+      ok: false,
+      message: `Selected search scope "${scope}" is unavailable on this host: ${fixedRoot}`,
+      roots: []
+    };
+  }
+  return { ok: true, roots: [fixedRoot] };
+}
+
+async function walkFiles(searchRoots, keyword, maxResults) {
+  const queue = [...searchRoots];
   const results = [];
   const normalizedKeyword = keyword.toLowerCase();
 
@@ -54,6 +103,7 @@ function openInExplorer(filePath) {
 
 module.exports = async function execute(params = {}) {
   const keyword = String(params.keyword || '').trim();
+  const searchScope = normalizeScope(params.searchScope);
   const rootPath = String(params.rootPath || 'D:\\').trim();
   const maxResults = Number(params.maxResults || 20);
   const openExplorer = Boolean(params.openExplorer || false);
@@ -65,14 +115,21 @@ module.exports = async function execute(params = {}) {
     };
   }
 
-  if (!fs.existsSync(rootPath)) {
+  const rootResolution = resolveSearchRoots(searchScope, rootPath);
+  if (!rootResolution.ok) {
     return {
       ok: false,
-      message: `Search root does not exist: ${rootPath}`
+      searchScope,
+      rootPath,
+      message: rootResolution.message
     };
   }
 
-  const matches = await walkFiles(rootPath, keyword, Math.max(1, Math.min(maxResults, 100)));
+  const matches = await walkFiles(
+    rootResolution.roots,
+    keyword,
+    Math.max(1, Math.min(maxResults, 100))
+  );
 
   let explorerResult = null;
   if (openExplorer && matches.length > 0) {
@@ -82,7 +139,9 @@ module.exports = async function execute(params = {}) {
   return {
     ok: true,
     keyword,
-    rootPath,
+    searchScope,
+    rootPath: searchScope === 'custom' ? rootPath : null,
+    scannedRoots: rootResolution.roots,
     count: matches.length,
     matches,
     explorer: explorerResult,
