@@ -23,6 +23,14 @@ function listAvailableDriveRoots() {
   return roots;
 }
 
+function getDefaultRootPath() {
+  if (fs.existsSync('D:\\')) return 'D:\\';
+  if (fs.existsSync('C:\\')) return 'C:\\';
+  const roots = listAvailableDriveRoots();
+  if (roots.length > 0) return roots[0];
+  return 'C:\\';
+}
+
 function resolveSearchRoots(scope, rootPath) {
   if (scope === 'all') {
     const roots = listAvailableDriveRoots();
@@ -33,22 +41,32 @@ function resolveSearchRoots(scope, rootPath) {
   }
 
   if (scope === 'custom') {
-    const customRoot = String(rootPath || 'D:\\').trim();
+    const customRoot = String(rootPath || getDefaultRootPath()).trim();
     if (!fs.existsSync(customRoot)) {
       return { ok: false, message: `Search root does not exist: ${customRoot}`, roots: [] };
     }
     return { ok: true, roots: [customRoot] };
   }
 
-  const fixedRoot = SCOPE_TO_PATH[scope] || 'D:\\';
-  if (!fs.existsSync(fixedRoot)) {
+  const preferredRoot = SCOPE_TO_PATH[scope] || 'D:\\';
+  if (fs.existsSync(preferredRoot)) {
+    return { ok: true, roots: [preferredRoot] };
+  }
+
+  const fallbackRoot = getDefaultRootPath();
+  if (!fs.existsSync(fallbackRoot)) {
     return {
       ok: false,
-      message: `Selected search scope "${scope}" is unavailable on this host: ${fixedRoot}`,
+      message: `Selected search scope "${scope}" is unavailable on this host and no fallback drive was found.`,
       roots: []
     };
   }
-  return { ok: true, roots: [fixedRoot] };
+
+  return {
+    ok: true,
+    roots: [fallbackRoot],
+    warning: `Selected search scope "${scope}" is unavailable. Fallback to ${fallbackRoot}.`
+  };
 }
 
 async function walkFiles(searchRoots, keyword, maxResults) {
@@ -104,7 +122,7 @@ function openInExplorer(filePath) {
 module.exports = async function execute(params = {}) {
   const keyword = String(params.keyword || '').trim();
   const searchScope = normalizeScope(params.searchScope);
-  const rootPath = String(params.rootPath || 'D:\\').trim();
+  const rootPath = String(params.rootPath || getDefaultRootPath()).trim();
   const maxResults = Number(params.maxResults || 20);
   const openExplorer = Boolean(params.openExplorer || false);
 
@@ -142,6 +160,7 @@ module.exports = async function execute(params = {}) {
     searchScope,
     rootPath: searchScope === 'custom' ? rootPath : null,
     scannedRoots: rootResolution.roots,
+    warning: rootResolution.warning || null,
     count: matches.length,
     matches,
     explorer: explorerResult,

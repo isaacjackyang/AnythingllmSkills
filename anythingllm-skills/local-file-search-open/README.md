@@ -90,7 +90,9 @@
 1. **skill 放錯目錄層級**
    - AnythingLLM 會掃描 `custom skills` 目錄下的每個技能資料夾。
    - 正確結構應為：`.../custom-skills/local-file-search-open/plugin.json`。
+
    - `plugin.json` 內的 `name` 使用 `local_file_search_open`（僅英數與底線），避免部份版本對 tool 名稱驗證不通過而導致開關自動回復 Off。
+
 
 2. **`plugin.json` 解析失敗或欄位缺失**
    - 至少要有 `name`、`version`、`entrypoint`、`parameters` 等基本欄位。
@@ -103,8 +105,8 @@
    - 這個技能會呼叫 `explorer.exe`，若不是 Windows 主機或遭安全軟體阻擋，可能異常。
 
 5. **預設路徑不存在（例如沒有 D 槽）**
-   - 本技能預設 `rootPath = D:\\`；若你的電腦沒有 D 槽，第一次呼叫就會回傳錯誤。
-   - 建議在呼叫時明確傳入存在的路徑（例如 `C:\\Users\\你的帳號\\Documents`）。
+   - 本技能預設 `rootPath = D:\\`；若你的電腦沒有 D 槽，會自動 fallback 到 `C:\\` 或其他可用磁碟。
+   - 你仍可在呼叫時明確傳入存在的路徑（例如 `C:\\Users\\你的帳號\\Documents`）。
 
 6. **桌面版暫存設定異常**
    - 偶發情況下設定檔損毀會造成 toggle 無法保存，重啟 AnythingLLM 後再重新啟用可先排查。
