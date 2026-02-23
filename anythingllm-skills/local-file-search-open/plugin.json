@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Search files on local Windows drive (default D:) by keyword, optionally open the file location in Explorer.",
   "author": "AnythingllmSkills",
-  "entrypoint": "handler.js",
+  "entrypoint": "index.js",
   "parameters": {
     "type": "object",
     "properties": {
@@ -24,6 +24,8 @@
         "description": "If true, open Windows Explorer and select the first matched file. Default: false"
       }
     },
-    "required": ["keyword"]
+    "required": [
+      "keyword"
+    ]
   }
 }

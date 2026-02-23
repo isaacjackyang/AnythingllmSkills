@@ -21,6 +21,16 @@
 3. 若你先前只有 `plugin.json`，請不要只放單一檔，建議四個檔案一起放（`skill.json/plugin.json/index.js/handler.js`）。
 4. 重啟 AnythingLLM Desktop 後再到 Skill 頁開啟。
 
+
+## 衝突修復（manifest/entrypoint）
+
+為了避免不同版本讀到不同 entrypoint 造成行為衝突，現在已統一：
+
+- `plugin.json` → `entrypoint: index.js`
+- `skill.json` → `entrypoint: index.js`
+
+`index.js` 只做相容轉發到 `handler.js`，可同時支援多種 loader 呼叫方式。
+
 ## 參數
 
 - `keyword` (required): 檔名關鍵字（不分大小寫）
