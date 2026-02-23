@@ -1,0 +1,35 @@
+{
+  "name": "BrowserTaskFlow",
+  "version": "0.2.0",
+  "description": "OpenClaw-like browser workflow: deterministic plan -> browser execution -> structured evidence log.",
+  "blocks": [
+    {
+      "id": "plan",
+      "type": "llm_instruction",
+      "config": {
+        "instruction": "把任務拆成 JSON，格式固定為 {goal:string, steps:[{id,action,target,expected}], output_schema:{screenshot_path,dom_summary,result_json}}。"
+      }
+    },
+    {
+      "id": "browser_exec",
+      "type": "mcp_tool",
+      "config": {
+        "server": "browser",
+        "tool": "run_playwright_script",
+        "inputTemplate": "依照 plan.steps 逐步執行並回傳 output_schema 對應欄位。"
+      }
+    },
+    {
+      "id": "save_evidence",
+      "type": "skill",
+      "config": {
+        "skill": "file_write_sandbox",
+        "input": {
+          "action": "write_text",
+          "path": "logs/browser_task_result.json",
+          "content": "{{ {plan: plan.output, execution: browser_exec.output} | json}}"
+        }
+      }
+    }
+  ]
+}
