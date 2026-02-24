@@ -131,7 +131,21 @@ npx tsx gateway/server.ts
 curl http://localhost:8787/healthz
 ```
 
-應回傳：`ok`
+Lifecycle（含 heartbeat + soul）：
+
+```bash
+curl http://localhost:8787/lifecycle
+```
+
+更新靈魂可變欄位（role/node_env）：
+
+```bash
+curl -X POST http://localhost:8787/lifecycle/soul \
+  -H "Content-Type: application/json" \
+  -d '{"role":"ops","node_env":"production"}'
+```
+
+應回傳 JSON，例如：`{"ok":true,"status":"ok","heartbeat_age_ms":12}`
 
 ---
 
@@ -145,6 +159,8 @@ curl http://localhost:8787/healthz
 - `ANYTHINGLLM_API_KEY`：AnythingLLM API Key（Developer API）
 - `DEFAULT_WORKSPACE`：預設 workspace（預設 `maiecho-prod`）
 - `DEFAULT_AGENT`：預設 agent（預設 `ops-agent`）
+- `HEARTBEAT_INTERVAL_MS`：心跳週期毫秒（預設 `10000`）
+- `SOUL_ROLE`：靈魂角色標籤（預設 `gateway`）
 
 範例（Linux/macOS）：
 
@@ -226,7 +242,7 @@ Connector 會解析前綴後，把剩餘文字作為真正 query。
 
 ### 7) 端到端驗收流程（Phase 1 最小可上線）
 
-1. 啟 Gateway（healthz = ok）
+1. 啟 Gateway（`GET /healthz` status = ok）
 2. 設定 Telegram webhook 指向 `/ingress/telegram`
 3. 在 Telegram 對 bot 發送訊息
 4. Gateway 轉 Event 並呼叫 AnythingLLM 產生 proposal
