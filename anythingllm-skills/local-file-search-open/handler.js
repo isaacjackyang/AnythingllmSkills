@@ -7,6 +7,8 @@ const SCOPE_TO_PATH = {
   d: 'D:\\'
 };
 
+const IS_WINDOWS = process.platform === 'win32';
+
 function normalizeScope(scope) {
   const value = String(scope || 'd').trim().toLowerCase();
   if (['all', 'c', 'd', 'custom'].includes(value)) return value;
@@ -24,6 +26,7 @@ function listAvailableDriveRoots() {
 }
 
 function getDefaultRootPath() {
+  if (!IS_WINDOWS) return process.cwd();
   if (fs.existsSync('D:\\')) return 'D:\\';
   if (fs.existsSync('C:\\')) return 'C:\\';
   const roots = listAvailableDriveRoots();
@@ -32,6 +35,23 @@ function getDefaultRootPath() {
 }
 
 function resolveSearchRoots(scope, rootPath) {
+  if (!IS_WINDOWS) {
+    const customRoot = String(rootPath || process.cwd()).trim() || process.cwd();
+    if (fs.existsSync(customRoot)) {
+      return {
+        ok: true,
+        roots: [customRoot],
+        warning: 'Non-Windows host detected. Using rootPath/current working directory as search root.'
+      };
+    }
+
+    return {
+      ok: true,
+      roots: [process.cwd()],
+      warning: 'Non-Windows host detected. rootPath not found, fallback to current working directory.'
+    };
+  }
+
   if (scope === 'all') {
     const roots = listAvailableDriveRoots();
     if (roots.length === 0) {
@@ -104,9 +124,16 @@ async function walkFiles(searchRoots, keyword, maxResults) {
 }
 
 function openInExplorer(filePath) {
+  if (!IS_WINDOWS) {
+    return Promise.resolve({
+      opened: false,
+      error: 'Explorer open is only supported on Windows hosts.'
+    });
+  }
+
   return new Promise((resolve) => {
     try {
-      const explorerArgs = ['/select,', filePath];
+      const explorerArgs = [`/select,${filePath}`];
       const child = spawn('explorer.exe', explorerArgs, {
         detached: true,
         stdio: 'ignore'
@@ -168,7 +195,9 @@ module.exports = async function execute(params = {}) {
       matches.length === 0
         ? 'No files matched the keyword.'
         : openExplorer
-          ? 'Search complete. Opened Explorer for the first match.'
+          ? explorerResult && explorerResult.opened
+            ? 'Search complete. Opened Explorer for the first match.'
+            : 'Search complete. Found matches but could not open Explorer on this host.'
           : 'Search complete.'
   };
 };
