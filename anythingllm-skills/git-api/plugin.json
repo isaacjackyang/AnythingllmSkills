@@ -1,47 +1,15 @@
 {
+  "hubId": "git_api",
+  "active": false,
   "name": "git_api",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "OpenClaw-like GitHub task skill with explicit actions, endpoint guardrails, and centralized token use.",
   "author": "AnythingllmSkills",
-  "entrypoint": "handler.js",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "action": {
-        "type": "string",
-        "enum": ["list_issues", "create_pull_request", "get_user"],
-        "description": "High-level GitHub action."
-      },
-      "owner": {
-        "type": "string",
-        "description": "Repository owner for repo-scoped actions."
-      },
-      "repo": {
-        "type": "string",
-        "description": "Repository name for repo-scoped actions."
-      },
-      "state": {
-        "type": "string",
-        "description": "Issue state for list_issues, default open."
-      },
-      "title": {
-        "type": "string",
-        "description": "PR title for create_pull_request."
-      },
-      "body": {
-        "type": "string",
-        "description": "PR body for create_pull_request."
-      },
-      "head": {
-        "type": "string",
-        "description": "PR head branch for create_pull_request."
-      },
-      "base": {
-        "type": "string",
-        "description": "PR base branch for create_pull_request, default main."
-      }
-    },
-    "required": ["action"],
-    "additionalProperties": false
+  "license": "MIT",
+  "examples": [],
+  "setup_args": {},
+  "entrypoint": {
+    "file": "handler.js",
+    "params": {}
   }
 }

@@ -29,15 +29,15 @@ function resolveInSandbox(inputPath) {
   return { ok: true, fullPath: candidate };
 }
 
-module.exports = async function execute(params = {}) {
-  const action = String(params.action || '').trim();
+async function execute(input = {}) {
+  const action = String(input.action || '').trim();
   if (!['write_text', 'append_text'].includes(action)) {
     return fail(action || 'unknown', 'Unsupported action. Use write_text or append_text.');
   }
 
-  const requestedPath = String(params.path || '').trim();
-  const content = String(params.content ?? '');
-  const encoding = String(params.encoding || 'utf8');
+  const requestedPath = String(input.path || '').trim();
+  const content = String(input.content ?? '');
+  const encoding = String(input.encoding || 'utf8');
 
   if (!requestedPath) return fail(action, 'Missing required parameter: path');
 
@@ -55,8 +55,16 @@ module.exports = async function execute(params = {}) {
 
   return pass(action, {
     path: resolved.fullPath,
-
     bytesWritten: Buffer.byteLength(content, encoding),
     mode: action === 'append_text' ? 'append' : 'overwrite'
   });
+}
+
+async function handler({ input } = {}) {
+  return execute(input || {});
+}
+
+module.exports = {
+  handler,
+  execute
 };

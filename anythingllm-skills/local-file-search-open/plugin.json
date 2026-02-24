@@ -1,36 +1,15 @@
 {
-
+  "hubId": "local_file_search_open",
+  "active": false,
   "name": "local_file_search_open",
-  "version": "1.1.1",
-
-  "description": "Search files on Windows by keyword with scope options (entire machine, C:, D:, or custom path), optionally open the file location in Explorer.",
+  "version": "1.2.0",
+  "description": "Search files on local host by keyword with scope options and optionally open Windows Explorer for first result.",
   "author": "AnythingllmSkills",
-  "entrypoint": "handler.js",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "keyword": {
-        "type": "string",
-        "description": "Keyword to search for in file names (case-insensitive)."
-      },
-      "searchScope": {
-        "type": "string",
-        "description": "Search scope: all (entire machine), c (C drive), d (D drive), or custom (use rootPath). Default: d"
-      },
-      "rootPath": {
-        "type": "string",
-        "description": "Search root folder path when searchScope=custom. Default: first available drive (D:\\ preferred, then C:\\)"
-      },
-      "maxResults": {
-        "type": "integer",
-        "description": "Maximum number of matched files to return. Default: 20"
-      },
-      "openExplorer": {
-        "type": "boolean",
-        "description": "If true, open Windows Explorer and select the first matched file. Default: false"
-      }
-    },
-    "required": ["keyword"],
-    "additionalProperties": false
+  "license": "MIT",
+  "examples": [],
+  "setup_args": {},
+  "entrypoint": {
+    "file": "handler.js",
+    "params": {}
   }
 }

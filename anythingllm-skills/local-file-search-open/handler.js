@@ -7,6 +7,8 @@ const SCOPE_TO_PATH = {
   d: 'D:\\'
 };
 
+const IS_WINDOWS = process.platform === 'win32';
+
 function normalizeScope(scope) {
   const value = String(scope || 'd').trim().toLowerCase();
   if (['all', 'c', 'd', 'custom'].includes(value)) return value;
@@ -24,6 +26,7 @@ function listAvailableDriveRoots() {
 }
 
 function getDefaultRootPath() {
+  if (!IS_WINDOWS) return process.cwd();
   if (fs.existsSync('D:\\')) return 'D:\\';
   if (fs.existsSync('C:\\')) return 'C:\\';
   const roots = listAvailableDriveRoots();
@@ -32,6 +35,23 @@ function getDefaultRootPath() {
 }
 
 function resolveSearchRoots(scope, rootPath) {
+  if (!IS_WINDOWS) {
+    const customRoot = String(rootPath || process.cwd()).trim() || process.cwd();
+    if (fs.existsSync(customRoot)) {
+      return {
+        ok: true,
+        roots: [customRoot],
+        warning: 'Non-Windows host detected. Using rootPath/current working directory as search root.'
+      };
+    }
+
+    return {
+      ok: true,
+      roots: [process.cwd()],
+      warning: 'Non-Windows host detected. rootPath not found, fallback to current working directory.'
+    };
+  }
+
   if (scope === 'all') {
     const roots = listAvailableDriveRoots();
     if (roots.length === 0) {
@@ -104,9 +124,16 @@ async function walkFiles(searchRoots, keyword, maxResults) {
 }
 
 function openInExplorer(filePath) {
+  if (!IS_WINDOWS) {
+    return Promise.resolve({
+      opened: false,
+      error: 'Explorer open is only supported on Windows hosts.'
+    });
+  }
+
   return new Promise((resolve) => {
     try {
-      const explorerArgs = ['/select,', filePath];
+      const explorerArgs = [`/select,${filePath}`];
       const child = spawn('explorer.exe', explorerArgs, {
         detached: true,
         stdio: 'ignore'
@@ -119,12 +146,12 @@ function openInExplorer(filePath) {
   });
 }
 
-module.exports = async function execute(params = {}) {
-  const keyword = String(params.keyword || '').trim();
-  const searchScope = normalizeScope(params.searchScope);
-  const rootPath = String(params.rootPath || getDefaultRootPath()).trim();
-  const maxResults = Number(params.maxResults || 20);
-  const openExplorer = Boolean(params.openExplorer || false);
+async function execute(input = {}, logger) {
+  const keyword = String(input.keyword || '').trim();
+  const searchScope = normalizeScope(input.searchScope);
+  const rootPath = String(input.rootPath || getDefaultRootPath()).trim();
+  const maxResults = Number(input.maxResults || 20);
+  const openExplorer = Boolean(input.openExplorer || false);
 
   if (!keyword) {
     return {
@@ -154,7 +181,7 @@ module.exports = async function execute(params = {}) {
     explorerResult = await openInExplorer(matches[0]);
   }
 
-  return {
+  const response = {
     ok: true,
     keyword,
     searchScope,
@@ -168,7 +195,28 @@ module.exports = async function execute(params = {}) {
       matches.length === 0
         ? 'No files matched the keyword.'
         : openExplorer
-          ? 'Search complete. Opened Explorer for the first match.'
+          ? explorerResult && explorerResult.opened
+            ? 'Search complete. Opened Explorer for the first match.'
+            : 'Search complete. Found matches but could not open Explorer on this host.'
           : 'Search complete.'
   };
+
+  if (logger && typeof logger.info === 'function') {
+    logger.info('local_file_search_open completed', {
+      ok: response.ok,
+      count: response.count,
+      searchScope: response.searchScope
+    });
+  }
+
+  return response;
+}
+
+async function handler({ input, logger } = {}) {
+  return execute(input || {}, logger);
+}
+
+module.exports = {
+  handler,
+  execute
 };

@@ -7,8 +7,11 @@
 
 ## 檔案結構
 
-- `plugin.json`：skill manifest（名稱、參數 schema、entrypoint）
+- `plugin.json`：skill manifest（AnythingLLM v1.11+ 建議使用 `entrypoint.file` 格式）
 - `handler.js`：實際搜尋與開啟檔案總管的執行邏輯
+
+
+> 相容性重點：`handler.js` 採用 `module.exports = { handler }`，且 `handler({ input, logger })` 介面與 v1.11.0-2 可運作的社群 skills 一致。
 
 ## 參數
 
@@ -110,5 +113,10 @@
 
 6. **桌面版暫存設定異常**
    - 偶發情況下設定檔損毀會造成 toggle 無法保存，重啟 AnythingLLM 後再重新啟用可先排查。
+
+7. **AnythingLLM 運行在 Linux / Docker（非 Windows）**
+   - 舊版只掃描 `C:\` / `D:\`，在非 Windows 主機會直接失敗，導致看起來像技能異常。
+   - 目前已修正：偵測到非 Windows 時會自動改用 `rootPath`（或目前工作目錄）作為搜尋根目錄，並在回傳 `warning` 說明。
+   - `openExplorer=true` 在非 Windows 會回傳 `explorer.opened=false` 與錯誤說明，不會讓整個 skill 失敗。
 
 建議排查順序：先確認資料夾結構與 `plugin.json`/`handler.js` 一致，再檢查主機是否 Windows、`rootPath` 是否存在，最後看 Desktop 日誌中的 skill 載入錯誤訊息。
