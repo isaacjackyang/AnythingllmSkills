@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agent Launch UI</title>
+    <style>
+      :root {
+        --bg-1: #0f172a;
+        --bg-2: #1e293b;
+        --card: rgba(15, 23, 42, 0.75);
+        --text: #e2e8f0;
+        --primary: #38bdf8;
+        --accent: #f472b6;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+        color: var(--text);
+        background: radial-gradient(circle at top right, #334155, var(--bg-1) 45%),
+          linear-gradient(135deg, var(--bg-1), var(--bg-2));
+      }
+
+      .panel {
+        width: min(920px, 92vw);
+        min-height: 540px;
+        padding: 2rem;
+        border-radius: 24px;
+        background: var(--card);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        backdrop-filter: blur(10px);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+      }
+
+      .content h1 {
+        margin: 0;
+        font-size: clamp(1.6rem, 3vw, 2.2rem);
+      }
+
+      .content p {
+        line-height: 1.7;
+        color: #cbd5e1;
+        margin: 1rem 0 1.5rem;
+      }
+
+      .start-btn {
+        border: 0;
+        border-radius: 999px;
+        font-size: 1.05rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        padding: 0.85rem 1.8rem;
+        cursor: pointer;
+        color: #0f172a;
+        background: linear-gradient(135deg, var(--primary), #22d3ee);
+        box-shadow: 0 12px 22px rgba(34, 211, 238, 0.35);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .start-btn:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 16px 26px rgba(34, 211, 238, 0.45);
+      }
+
+      .stage {
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
+      }
+
+      .assistant {
+        position: relative;
+        width: 190px;
+        height: 420px;
+        transform-origin: bottom center;
+        animation: sway 2.8s ease-in-out infinite;
+      }
+
+      .shadow {
+        position: absolute;
+        width: 190px;
+        height: 26px;
+        border-radius: 50%;
+        background: rgba(15, 23, 42, 0.55);
+        bottom: 4px;
+        filter: blur(2px);
+        animation: shadowPulse 2.8s ease-in-out infinite;
+      }
+
+      .head {
+        position: absolute;
+        width: 74px;
+        height: 74px;
+        left: 58px;
+        top: 24px;
+        border-radius: 50%;
+        background: #f8c8b9;
+        z-index: 4;
+      }
+
+      .hair {
+        position: absolute;
+        width: 92px;
+        height: 108px;
+        left: 49px;
+        top: 14px;
+        border-radius: 46px 46px 34px 34px;
+        background: #1f2937;
+        z-index: 3;
+      }
+
+      .body {
+        position: absolute;
+        width: 110px;
+        height: 168px;
+        left: 40px;
+        top: 96px;
+        border-radius: 26px 26px 20px 20px;
+        background: linear-gradient(180deg, #f472b6, #ec4899);
+        z-index: 2;
+      }
+
+      .arms,
+      .legs {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+
+      .arm {
+        position: absolute;
+        width: 24px;
+        height: 110px;
+        top: 112px;
+        border-radius: 16px;
+        background: #f8c8b9;
+        transform-origin: top center;
+      }
+
+      .arm.left {
+        left: 20px;
+        animation: armWave 2.8s ease-in-out infinite;
+      }
+
+      .arm.right {
+        right: 20px;
+        animation: armWave 2.8s ease-in-out infinite reverse;
+      }
+
+      .leg {
+        position: absolute;
+        width: 30px;
+        height: 150px;
+        bottom: 10px;
+        border-radius: 16px;
+        background: #0f172a;
+        transform-origin: top center;
+      }
+
+      .leg.left {
+        left: 56px;
+        animation: step 1.3s ease-in-out infinite;
+      }
+
+      .leg.right {
+        right: 56px;
+        animation: step 1.3s ease-in-out infinite reverse;
+      }
+
+      .shoe {
+        position: absolute;
+        width: 42px;
+        height: 16px;
+        bottom: -8px;
+        border-radius: 12px;
+        background: #111827;
+      }
+
+      .leg.left .shoe { left: -6px; }
+      .leg.right .shoe { right: -6px; }
+
+      .status {
+        margin-top: 1rem;
+        font-size: 0.95rem;
+        color: #a5f3fc;
+        min-height: 1.2em;
+      }
+
+      @keyframes sway {
+        0%, 100% { transform: translateY(0) rotate(-1deg); }
+        50% { transform: translateY(-4px) rotate(1deg); }
+      }
+
+      @keyframes armWave {
+        0%, 100% { transform: rotate(8deg); }
+        50% { transform: rotate(-16deg); }
+      }
+
+      @keyframes step {
+        0%, 100% { transform: rotate(7deg); }
+        50% { transform: rotate(-8deg); }
+      }
+
+      @keyframes shadowPulse {
+        0%, 100% { transform: scaleX(1); opacity: 0.48; }
+        50% { transform: scaleX(0.86); opacity: 0.3; }
+      }
+
+      @media (max-width: 760px) {
+        .panel { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="panel">
+      <section class="content">
+        <h1>Agent 啟動面板</h1>
+        <p>
+          歡迎使用 Agent 控制台。按下按鈕後，系統會初始化流程並開始執行任務。
+        </p>
+        <button id="startAgent" class="start-btn" type="button">Start Agent</button>
+        <p id="status" class="status" aria-live="polite"></p>
+      </section>
+
+      <section class="stage" aria-label="秘書角色動畫">
+        <div class="assistant" role="img" aria-label="正妹秘書風格全身動畫角色">
+          <div class="hair"></div>
+          <div class="head"></div>
+          <div class="body"></div>
+          <div class="arms">
+            <div class="arm left"></div>
+            <div class="arm right"></div>
+          </div>
+          <div class="legs">
+            <div class="leg left"><span class="shoe"></span></div>
+            <div class="leg right"><span class="shoe"></span></div>
+          </div>
+        </div>
+        <div class="shadow"></div>
+      </section>
+    </main>
+
+    <script>
+      const button = document.getElementById('startAgent');
+      const status = document.getElementById('status');
+
+      button.addEventListener('click', () => {
+        status.textContent = 'Agent 啟動中...';
+        button.disabled = true;
+        setTimeout(() => {
+          status.textContent = 'Agent 已啟動，秘書待命中。';
+          button.disabled = false;
+        }, 1200);
+      });
+    </script>
+  </body>
+</html>
