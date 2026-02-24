@@ -261,6 +261,11 @@
         cursor: pointer;
       }
 
+      .ctrl-btn.stop {
+        border-color: rgba(251, 113, 133, 0.55);
+        color: #fecdd3;
+      }
+
       .console-log {
         margin: 0;
         height: 100%;
@@ -380,6 +385,7 @@
             <div class="control-row">
               <button id="pauseAgent" class="ctrl-btn" type="button">暫停任務</button>
               <button id="resumeAgent" class="ctrl-btn" type="button">恢復任務</button>
+              <button id="stopAgent" class="ctrl-btn stop" type="button">停止 Agent</button>
               <button id="clearConsole" class="ctrl-btn" type="button">清除 Console</button>
             </div>
           </section>
@@ -411,10 +417,12 @@
       const consoleLogLandscape = document.getElementById('consoleLogLandscape');
       const pauseBtn = document.getElementById('pauseAgent');
       const resumeBtn = document.getElementById('resumeAgent');
+      const stopBtn = document.getElementById('stopAgent');
       const clearConsoleBtn = document.getElementById('clearConsole');
 
-      const setTime = () => {
-        lastUpdated.textContent = new Date().toLocaleTimeString('zh-Hant-TW', { hour12: false });
+      const toLocalTime = (iso) => {
+        if (!iso) return '--:--:--';
+        return new Date(iso).toLocaleTimeString('zh-Hant-TW', { hour12: false });
       };
 
       const appendLog = (text) => {
@@ -424,45 +432,99 @@
         });
       };
 
-      button.addEventListener('click', () => {
-        status.textContent = 'Agent 啟動中...';
-        button.disabled = true;
-        assistantStatus.textContent = 'Initializing';
-        executionStatus.textContent = '準備中';
-        taskProgress.textContent = '15%';
-        setTime();
-        appendLog('[boot] 初始化 Agent worker');
+      const applyControlState = (data) => {
+        assistantStatus.textContent = data.assistant_status;
+        executionStatus.textContent = data.execution_status;
+        taskProgress.textContent = `${data.task_progress}%`;
+        lastUpdated.textContent = toLocalTime(data.last_updated_at);
 
-        setTimeout(() => {
+        button.disabled = !data.can.start;
+        pauseBtn.disabled = !data.can.pause;
+        resumeBtn.disabled = !data.can.resume;
+        stopBtn.disabled = !data.can.stop;
+      };
+
+      const refreshState = async () => {
+        const response = await fetch('/api/agent/control');
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || '讀取 Agent 狀態失敗');
+        }
+        applyControlState(payload.data);
+      };
+
+      const sendControl = async (action) => {
+        const response = await fetch('/api/agent/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || `${action} 失敗`);
+        }
+        applyControlState(payload.data);
+        return payload.data;
+      };
+
+      button.addEventListener('click', async () => {
+        try {
+          status.textContent = 'Agent 啟動中...';
+          await sendControl('start');
           status.textContent = 'Agent 已啟動，秘書待命中。';
-          button.disabled = false;
-          assistantStatus.textContent = 'Ready';
-          executionStatus.textContent = '執行中';
-          taskProgress.textContent = '68%';
-          setTime();
-          appendLog('[task] 任務佇列已開始處理');
-        }, 1200);
+          appendLog('[control] 使用者啟動 Agent');
+        } catch (error) {
+          status.textContent = `啟動失敗：${error.message}`;
+          appendLog(`[error] 啟動失敗：${error.message}`);
+        }
       });
 
-      pauseBtn.addEventListener('click', () => {
-        executionStatus.textContent = '已暫停';
-        setTime();
-        appendLog('[control] 使用者暫停任務');
+      pauseBtn.addEventListener('click', async () => {
+        try {
+          await sendControl('pause');
+          status.textContent = 'Agent 已暫停。';
+          appendLog('[control] 使用者暫停任務');
+        } catch (error) {
+          status.textContent = `暫停失敗：${error.message}`;
+          appendLog(`[error] 暫停失敗：${error.message}`);
+        }
       });
 
-      resumeBtn.addEventListener('click', () => {
-        executionStatus.textContent = '執行中';
-        taskProgress.textContent = '82%';
-        setTime();
-        appendLog('[control] 使用者恢復任務');
+      resumeBtn.addEventListener('click', async () => {
+        try {
+          await sendControl('resume');
+          status.textContent = 'Agent 已恢復執行。';
+          appendLog('[control] 使用者恢復任務');
+        } catch (error) {
+          status.textContent = `恢復失敗：${error.message}`;
+          appendLog(`[error] 恢復失敗：${error.message}`);
+        }
+      });
+
+      stopBtn.addEventListener('click', async () => {
+        try {
+          await sendControl('stop');
+          status.textContent = 'Agent 已停止。';
+          appendLog('[control] 使用者停止 Agent');
+        } catch (error) {
+          status.textContent = `停止失敗：${error.message}`;
+          appendLog(`[error] 停止失敗：${error.message}`);
+        }
       });
 
       clearConsoleBtn.addEventListener('click', () => {
         [consoleLog, consoleLogLandscape].forEach((targetLog) => {
           targetLog.textContent = '[system] console 已清空';
         });
-        setTime();
+        lastUpdated.textContent = toLocalTime(new Date().toISOString());
       });
+
+      refreshState()
+        .then(() => appendLog('[system] 已連線 Gateway 控制 API'))
+        .catch((error) => {
+          status.textContent = `無法連線控制 API：${error.message}`;
+          appendLog(`[error] 無法連線控制 API：${error.message}`);
+        });
     </script>
   </body>
 </html>

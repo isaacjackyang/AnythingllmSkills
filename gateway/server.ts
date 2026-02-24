@@ -1,8 +1,11 @@
 import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { TelegramConnector } from "./connectors/telegram/connector";
 import { AnythingLlmClient } from "./core/anythingllm_client";
 import { getLifecycleSnapshot, parseHeartbeatInterval, startHeartbeat, updateSoul } from "./core/lifecycle";
 import { routeEvent } from "./core/router";
+import { applyAgentControl, getAgentControlSnapshot } from "./core/agent_control";
 
 const port = Number(process.env.PORT ?? 8787);
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN ?? "";
@@ -28,7 +31,50 @@ const brain = new AnythingLlmClient({
   apiKey: anythingApiKey,
 });
 
+
+const approvalUiPath = path.resolve(process.cwd(), "gateway/web/approval_ui/index.html");
+
 const server = createServer(async (req, res) => {
+  if (req.method === "GET" && req.url === "/approval-ui") {
+    try {
+      const html = await readFile(approvalUiPath, "utf8");
+      res.statusCode = 200;
+      res.setHeader("content-type", "text/html; charset=utf-8");
+      res.end(html);
+      return;
+    } catch (error) {
+      res.statusCode = 500;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: (error as Error).message }));
+      return;
+    }
+  }
+
+  if (req.method === "GET" && req.url === "/api/agent/control") {
+    res.statusCode = 200;
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ ok: true, data: getAgentControlSnapshot() }));
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/api/agent/control") {
+    try {
+      const raw = await readBody(req);
+      const payload = raw ? JSON.parse(raw) : {};
+      const action = payload.action as "start" | "pause" | "resume" | "stop";
+      const data = applyAgentControl(action);
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true, data }));
+      return;
+    } catch (error) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: (error as Error).message }));
+      return;
+    }
+  }
+
   if (req.method === "GET" && req.url === "/healthz") {
     const lifecycle = getLifecycleSnapshot();
     res.statusCode = lifecycle.status === "ok" ? 200 : 503;
