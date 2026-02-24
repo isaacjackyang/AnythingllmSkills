@@ -10,6 +10,18 @@
 - **一致命名**：plan 輸出欄位需和後續 block 引用完全一致，避免 hidden mismatch
 - **審計欄位**：flow logs 內加入 `audit:{flow,version}`，方便追蹤與 debug
 
+
+## Skill 開發新範式（Single Binary CLI First）
+
+本 repo 的 Skill 規範已改為：
+
+- Skill 僅負責路由與驗證
+- 所有副作用集中到自有單一 Rust/Go CLI
+- 禁止 on-demand Python/JS/TS 腳本
+- 禁止依賴未審核第三方 Skill Hub
+
+完整規範見 `SKILL.md`。
+
 ## Skills
 
 ### 1) `ps_run_safe`
