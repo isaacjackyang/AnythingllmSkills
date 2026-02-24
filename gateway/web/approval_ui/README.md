@@ -10,4 +10,5 @@ Minimum workflow:
 
 ## Demo UI
 
-- `index.html` 提供啟動畫面，包含 `Start Agent` 按鈕與秘書風格全身動畫角色，可作為控制面原型。
+- `index.html` 現在會呼叫 Gateway 控制 API（`GET/POST /api/agent/control`），並可透過 `/approval-ui` 直接載入。
+- 支援 `Start/Pause/Resume/Stop` 實際控制狀態切換，不再只是純前端假資料。
