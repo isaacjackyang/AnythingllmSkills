@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { TelegramConnector } from "./connectors/telegram/connector";
 import { AnythingLlmClient } from "./core/anythingllm_client";
+import { getLifecycleSnapshot, parseHeartbeatInterval, startHeartbeat, updateSoul } from "./core/lifecycle";
 import { routeEvent } from "./core/router";
 
 const port = Number(process.env.PORT ?? 8787);
@@ -9,9 +10,12 @@ const anythingBaseUrl = process.env.ANYTHINGLLM_BASE_URL ?? "http://localhost:30
 const anythingApiKey = process.env.ANYTHINGLLM_API_KEY ?? "";
 const workspace = process.env.DEFAULT_WORKSPACE ?? "maiecho-prod";
 const agent = process.env.DEFAULT_AGENT ?? "ops-agent";
+const heartbeatIntervalMs = parseHeartbeatInterval(process.env.HEARTBEAT_INTERVAL_MS, 10_000);
 
 if (!telegramToken) console.warn("TELEGRAM_BOT_TOKEN is empty: telegram sendReply will fail");
 if (!anythingApiKey) console.warn("ANYTHINGLLM_API_KEY is empty: brain calls will fail");
+
+startHeartbeat(heartbeatIntervalMs);
 
 const connector = new TelegramConnector({
   botToken: telegramToken,
@@ -26,9 +30,37 @@ const brain = new AnythingLlmClient({
 
 const server = createServer(async (req, res) => {
   if (req.method === "GET" && req.url === "/healthz") {
-    res.statusCode = 200;
-    res.end("ok");
+    const lifecycle = getLifecycleSnapshot();
+    res.statusCode = lifecycle.status === "ok" ? 200 : 503;
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ ok: lifecycle.status === "ok", status: lifecycle.status, heartbeat_age_ms: lifecycle.heartbeat.age_ms }));
     return;
+  }
+
+  if (req.method === "GET" && req.url === "/lifecycle") {
+    const lifecycle = getLifecycleSnapshot();
+    res.statusCode = lifecycle.status === "ok" ? 200 : 503;
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify(lifecycle));
+    return;
+  }
+
+
+  if (req.method === "POST" && req.url === "/lifecycle/soul") {
+    try {
+      const raw = await readBody(req);
+      const payload = raw ? JSON.parse(raw) : {};
+      const soul = updateSoul(payload as { role?: string; node_env?: string });
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true, soul }));
+      return;
+    } catch (error) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: (error as Error).message }));
+      return;
+    }
   }
 
   if (req.method === "POST" && req.url === "/ingress/telegram") {
