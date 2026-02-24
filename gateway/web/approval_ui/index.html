@@ -196,6 +196,95 @@
         min-height: 1.2em;
       }
 
+      .monitor {
+        margin-top: 1.4rem;
+        display: grid;
+        gap: 0.8rem;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 0.6rem;
+      }
+
+      .tab-btn {
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.65);
+        color: #cbd5e1;
+        padding: 0.38rem 0.9rem;
+        font-size: 0.85rem;
+        cursor: pointer;
+      }
+
+      .tab-btn.active {
+        color: #082f49;
+        border-color: transparent;
+        background: linear-gradient(135deg, #67e8f9, #22d3ee);
+      }
+
+      .pane {
+        display: none;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 14px;
+        background: rgba(15, 23, 42, 0.6);
+        padding: 0.95rem;
+      }
+
+      .pane.active { display: block; }
+
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.55rem;
+      }
+
+      .metric {
+        border-radius: 10px;
+        background: rgba(30, 41, 59, 0.8);
+        border: 1px solid rgba(148, 163, 184, 0.15);
+        padding: 0.55rem 0.65rem;
+      }
+
+      .metric .label {
+        font-size: 0.75rem;
+        color: #94a3b8;
+      }
+
+      .metric .value {
+        margin-top: 0.2rem;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #e2e8f0;
+      }
+
+      .control-row {
+        margin-top: 0.7rem;
+        display: flex;
+        gap: 0.55rem;
+      }
+
+      .ctrl-btn {
+        border: 1px solid rgba(125, 211, 252, 0.45);
+        background: rgba(15, 23, 42, 0.8);
+        color: #bae6fd;
+        border-radius: 8px;
+        padding: 0.45rem 0.72rem;
+        font-size: 0.78rem;
+        cursor: pointer;
+      }
+
+      .console-log {
+        margin: 0;
+        max-height: 175px;
+        overflow: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.76rem;
+        line-height: 1.45;
+        color: #bfdbfe;
+        white-space: pre-wrap;
+      }
+
       @keyframes sway {
         0%, 100% { transform: translateY(0) rotate(-1deg); }
         50% { transform: translateY(-4px) rotate(1deg); }
@@ -230,6 +319,43 @@
         </p>
         <button id="startAgent" class="start-btn" type="button">Start Agent</button>
         <p id="status" class="status" aria-live="polite"></p>
+
+        <section class="monitor" aria-label="Agent dashboard 與 console">
+          <div class="tabs" role="tablist" aria-label="監控頁籤">
+            <button class="tab-btn active" data-tab="dashboard" type="button" role="tab" aria-selected="true">Dashboard</button>
+            <button class="tab-btn" data-tab="console" type="button" role="tab" aria-selected="false">Console</button>
+          </div>
+
+          <section id="dashboardPane" class="pane active" role="tabpanel" aria-label="dashboard">
+            <div class="metric-grid">
+              <article class="metric">
+                <div class="label">助手狀態</div>
+                <div id="assistantStatus" class="value">Idle</div>
+              </article>
+              <article class="metric">
+                <div class="label">執行狀態</div>
+                <div id="executionStatus" class="value">未執行</div>
+              </article>
+              <article class="metric">
+                <div class="label">進度</div>
+                <div id="taskProgress" class="value">0%</div>
+              </article>
+              <article class="metric">
+                <div class="label">最後更新</div>
+                <div id="lastUpdated" class="value">--:--:--</div>
+              </article>
+            </div>
+            <div class="control-row">
+              <button id="pauseAgent" class="ctrl-btn" type="button">暫停任務</button>
+              <button id="resumeAgent" class="ctrl-btn" type="button">恢復任務</button>
+              <button id="clearConsole" class="ctrl-btn" type="button">清除 Console</button>
+            </div>
+          </section>
+
+          <section id="consolePane" class="pane" role="tabpanel" aria-label="console">
+            <pre id="consoleLog" class="console-log">[system] 等待啟動指令...</pre>
+          </section>
+        </section>
       </section>
 
       <section class="stage" aria-label="秘書角色動畫">
@@ -253,14 +379,80 @@
     <script>
       const button = document.getElementById('startAgent');
       const status = document.getElementById('status');
+      const assistantStatus = document.getElementById('assistantStatus');
+      const executionStatus = document.getElementById('executionStatus');
+      const taskProgress = document.getElementById('taskProgress');
+      const lastUpdated = document.getElementById('lastUpdated');
+      const consoleLog = document.getElementById('consoleLog');
+      const pauseBtn = document.getElementById('pauseAgent');
+      const resumeBtn = document.getElementById('resumeAgent');
+      const clearConsoleBtn = document.getElementById('clearConsole');
+
+      const tabButtons = document.querySelectorAll('.tab-btn');
+      const tabPanes = {
+        dashboard: document.getElementById('dashboardPane'),
+        console: document.getElementById('consolePane')
+      };
+
+      const setTime = () => {
+        lastUpdated.textContent = new Date().toLocaleTimeString('zh-Hant-TW', { hour12: false });
+      };
+
+      const appendLog = (text) => {
+        consoleLog.textContent += `\n${text}`;
+        consoleLog.scrollTop = consoleLog.scrollHeight;
+      };
+
+      tabButtons.forEach((tab) => {
+        tab.addEventListener('click', () => {
+          const target = tab.dataset.tab;
+          tabButtons.forEach((item) => {
+            item.classList.toggle('active', item === tab);
+            item.setAttribute('aria-selected', String(item === tab));
+          });
+
+          Object.entries(tabPanes).forEach(([key, pane]) => {
+            pane.classList.toggle('active', key === target);
+          });
+        });
+      });
 
       button.addEventListener('click', () => {
         status.textContent = 'Agent 啟動中...';
         button.disabled = true;
+        assistantStatus.textContent = 'Initializing';
+        executionStatus.textContent = '準備中';
+        taskProgress.textContent = '15%';
+        setTime();
+        appendLog('[boot] 初始化 Agent worker');
+
         setTimeout(() => {
           status.textContent = 'Agent 已啟動，秘書待命中。';
           button.disabled = false;
+          assistantStatus.textContent = 'Ready';
+          executionStatus.textContent = '執行中';
+          taskProgress.textContent = '68%';
+          setTime();
+          appendLog('[task] 任務佇列已開始處理');
         }, 1200);
+      });
+
+      pauseBtn.addEventListener('click', () => {
+        executionStatus.textContent = '已暫停';
+        setTime();
+        appendLog('[control] 使用者暫停任務');
+      });
+
+      resumeBtn.addEventListener('click', () => {
+        executionStatus.textContent = '執行中';
+        taskProgress.textContent = '82%';
+        setTime();
+        appendLog('[control] 使用者恢復任務');
+      });
+
+      clearConsoleBtn.addEventListener('click', () => {
+        consoleLog.textContent = '[system] console 已清空';
+        setTime();
       });
     </script>
   </body>
