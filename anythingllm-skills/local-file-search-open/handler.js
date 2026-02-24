@@ -146,12 +146,12 @@ function openInExplorer(filePath) {
   });
 }
 
-module.exports = async function execute(params = {}) {
-  const keyword = String(params.keyword || '').trim();
-  const searchScope = normalizeScope(params.searchScope);
-  const rootPath = String(params.rootPath || getDefaultRootPath()).trim();
-  const maxResults = Number(params.maxResults || 20);
-  const openExplorer = Boolean(params.openExplorer || false);
+async function execute(input = {}, logger) {
+  const keyword = String(input.keyword || '').trim();
+  const searchScope = normalizeScope(input.searchScope);
+  const rootPath = String(input.rootPath || getDefaultRootPath()).trim();
+  const maxResults = Number(input.maxResults || 20);
+  const openExplorer = Boolean(input.openExplorer || false);
 
   if (!keyword) {
     return {
@@ -181,7 +181,7 @@ module.exports = async function execute(params = {}) {
     explorerResult = await openInExplorer(matches[0]);
   }
 
-  return {
+  const response = {
     ok: true,
     keyword,
     searchScope,
@@ -200,4 +200,23 @@ module.exports = async function execute(params = {}) {
             : 'Search complete. Found matches but could not open Explorer on this host.'
           : 'Search complete.'
   };
+
+  if (logger && typeof logger.info === 'function') {
+    logger.info('local_file_search_open completed', {
+      ok: response.ok,
+      count: response.count,
+      searchScope: response.searchScope
+    });
+  }
+
+  return response;
+}
+
+async function handler({ input, logger } = {}) {
+  return execute(input || {}, logger);
+}
+
+module.exports = {
+  handler,
+  execute
 };

@@ -7,8 +7,11 @@
 
 ## 檔案結構
 
-- `plugin.json`：skill manifest（名稱、參數 schema、entrypoint）
+- `plugin.json`：skill manifest（AnythingLLM v1.11+ 建議使用 `entrypoint.file` 格式）
 - `handler.js`：實際搜尋與開啟檔案總管的執行邏輯
+
+
+> 相容性重點：`handler.js` 採用 `module.exports = { handler }`，且 `handler({ input, logger })` 介面與 v1.11.0-2 可運作的社群 skills 一致。
 
 ## 參數
 

@@ -1,31 +1,15 @@
 {
+  "hubId": "file_write_sandbox",
+  "active": false,
   "name": "file_write_sandbox",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "OpenClaw-like sandboxed file writer with strict action contract and audit output.",
   "author": "AnythingllmSkills",
-  "entrypoint": "handler.js",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "action": {
-        "type": "string",
-        "enum": ["write_text", "append_text"],
-        "description": "Action selector for write mode."
-      },
-      "path": {
-        "type": "string",
-        "description": "Absolute or relative file path under C:\\agent_sandbox."
-      },
-      "content": {
-        "type": "string",
-        "description": "Text content to write."
-      },
-      "encoding": {
-        "type": "string",
-        "description": "Text encoding. Default utf8."
-      }
-    },
-    "required": ["action", "path", "content"],
-    "additionalProperties": false
+  "license": "MIT",
+  "examples": [],
+  "setup_args": {},
+  "entrypoint": {
+    "file": "handler.js",
+    "params": {}
   }
 }

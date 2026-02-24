@@ -1,4 +1,3 @@
-
 function nowIso() {
   return new Date().toISOString();
 }
@@ -10,7 +9,6 @@ function fail(action, message, detail = {}) {
 function pass(action, data, audit = {}) {
   return { ok: true, action, data, audit: { timestamp: nowIso(), ...audit } };
 }
-
 
 function isSafeIdentifier(value) {
   return /^[a-zA-Z0-9._-]+$/.test(value || '');
@@ -36,30 +34,26 @@ async function githubRequest(method, endpoint, token, body) {
     // keep text
   }
 
-
   return { ok: response.ok, status: response.status, payload };
-
 }
 
-module.exports = async function execute(params = {}) {
-  const action = String(params.action || '').trim();
+async function execute(input = {}) {
+  const action = String(input.action || '').trim();
   const token = process.env.GITHUB_TOKEN;
 
   if (!token) return fail(action || 'unknown', 'Missing GITHUB_TOKEN environment variable.');
 
-
   if (action === 'get_user') {
     const result = await githubRequest('GET', '/user', token);
     return result.ok
-
       ? pass(action, result.payload, { status: result.status, endpoint: '/user' })
       : fail(action, 'GitHub API error.', { status: result.status, endpoint: '/user', payload: result.payload });
   }
 
   if (action === 'list_issues') {
-    const owner = String(params.owner || '').trim();
-    const repo = String(params.repo || '').trim();
-    const state = String(params.state || 'open').trim();
+    const owner = String(input.owner || '').trim();
+    const repo = String(input.repo || '').trim();
+    const state = String(input.state || 'open').trim();
 
     if (!isSafeIdentifier(owner) || !isSafeIdentifier(repo)) {
       return fail(action, 'Invalid owner/repo format.');
@@ -73,14 +67,12 @@ module.exports = async function execute(params = {}) {
   }
 
   if (action === 'create_pull_request') {
-    const owner = String(params.owner || '').trim();
-    const repo = String(params.repo || '').trim();
-
-    const title = String(params.title || '').trim();
-    const body = String(params.body || '').trim();
-    const head = String(params.head || '').trim();
-    const base = String(params.base || 'main').trim();
-
+    const owner = String(input.owner || '').trim();
+    const repo = String(input.repo || '').trim();
+    const title = String(input.title || '').trim();
+    const body = String(input.body || '').trim();
+    const head = String(input.head || '').trim();
+    const base = String(input.base || 'main').trim();
 
     if (!isSafeIdentifier(owner) || !isSafeIdentifier(repo)) {
       return fail(action, 'Invalid owner/repo format.');
@@ -98,5 +90,13 @@ module.exports = async function execute(params = {}) {
   }
 
   return fail(action || 'unknown', 'Unsupported action. Use get_user, list_issues, create_pull_request.');
+}
 
+async function handler({ input } = {}) {
+  return execute(input || {});
+}
+
+module.exports = {
+  handler,
+  execute
 };

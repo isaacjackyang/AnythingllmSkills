@@ -1,31 +1,15 @@
 {
+  "hubId": "file_read_sandbox",
+  "active": false,
   "name": "file_read_sandbox",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "OpenClaw-like sandboxed file reader with strict action contract and audit output.",
   "author": "AnythingllmSkills",
-  "entrypoint": "handler.js",
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "action": {
-        "type": "string",
-        "enum": ["read_text"],
-        "description": "Action selector. Only read_text is supported."
-      },
-      "path": {
-        "type": "string",
-        "description": "Absolute or relative file path under C:\\agent_sandbox."
-      },
-      "encoding": {
-        "type": "string",
-        "description": "Text encoding. Default utf8."
-      },
-      "maxBytes": {
-        "type": "integer",
-        "description": "Max bytes to read. Default 65536, max 1048576."
-      }
-    },
-    "required": ["action", "path"],
-    "additionalProperties": false
+  "license": "MIT",
+  "examples": [],
+  "setup_args": {},
+  "entrypoint": {
+    "file": "handler.js",
+    "params": {}
   }
 }

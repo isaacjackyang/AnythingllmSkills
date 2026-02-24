@@ -59,3 +59,10 @@
 - skill 輸出必須有 `ok/action/audit`
 - flow 執行完要在 `C:\agent_sandbox\logs\*.json` 留痕
 
+
+
+## 相容性更新（AnythingLLM v1.11+）
+
+- 所有 skills 的 `plugin.json` 已統一改為 `entrypoint.file` 格式。
+- 所有 `handler.js` 已統一提供 `module.exports = { handler }`，並使用 `handler({ input, logger })` 介面。
+- 參數驗證改由各 skill 內部執行邏輯檢查，維持既有安全規則。

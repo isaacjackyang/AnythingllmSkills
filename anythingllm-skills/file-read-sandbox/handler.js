@@ -1,5 +1,4 @@
 const fs = require('fs');
-
 const path = require('path');
 
 const SANDBOX_ROOT = 'C:\\agent_sandbox';
@@ -30,13 +29,13 @@ function resolveInSandbox(inputPath) {
   return { ok: true, fullPath: candidate };
 }
 
-module.exports = async function execute(params = {}) {
-  const action = String(params.action || '').trim();
+async function execute(input = {}) {
+  const action = String(input.action || '').trim();
   if (action !== 'read_text') return fail(action || 'unknown', 'Unsupported action. Only read_text is available.');
 
-  const requestedPath = String(params.path || '').trim();
-  const encoding = String(params.encoding || 'utf8');
-  const maxBytes = Math.max(1, Math.min(Number(params.maxBytes || 65536), 1024 * 1024));
+  const requestedPath = String(input.path || '').trim();
+  const encoding = String(input.encoding || 'utf8');
+  const maxBytes = Math.max(1, Math.min(Number(input.maxBytes || 65536), 1024 * 1024));
 
   if (!requestedPath) return fail(action, 'Missing required parameter: path');
 
@@ -57,7 +56,15 @@ module.exports = async function execute(params = {}) {
     path: resolved.fullPath,
     bytesRead: size,
     truncated: stat.size > size,
-
     content: buffer.toString(encoding)
   });
+}
+
+async function handler({ input } = {}) {
+  return execute(input || {});
+}
+
+module.exports = {
+  handler,
+  execute
 };
