@@ -98,6 +98,56 @@
 
 目前已補上 Telegram connector 與 AnythingLLM API client，並提供 `gateway/server.ts` 直接串起第一條生命線。
 
+## 一鍵初次啟動檢查（Gateway）
+
+若你是第一次在新機器啟動 Gateway，可先執行：
+
+```bash
+# 方式一：直接用 bash 跑
+bash scripts/bootstrap_gateway.sh
+
+# 方式二：先加可執行權限再執行
+chmod +x scripts/bootstrap_gateway.sh
+./scripts/bootstrap_gateway.sh
+```
+
+此腳本會：
+
+- 檢查 Node.js（要求 >= v20）
+- 檢查 npm / npx
+- 若缺少 `package.json` 則自動 `npm init -y`
+- 安裝本地開發依賴：`typescript`、`tsx`、`@types/node`
+- 產生 `.env.gateway` 環境變數模板（若檔案已存在則不覆蓋）
+- 驗證 `npx tsc --version` 與 `npx tsx --version`
+
+完成後請設定環境變數：
+
+```bash
+# 1) 編輯你的設定
+vim .env.gateway
+
+# 2) 載入環境變數（目前 shell 生效）
+set -a; source .env.gateway; set +a
+```
+
+若只想先看環境變數模板：
+
+```bash
+bash scripts/bootstrap_gateway.sh --print-env
+```
+
+若你所在環境禁止 npm 安裝（例如企業 registry 限制），可先跳過 tooling 安裝：
+
+```bash
+bash scripts/bootstrap_gateway.sh --skip-tooling
+```
+
+最後啟動 Gateway：
+
+```bash
+npx tsx gateway/server.ts
+```
+
 ## 安裝、設定、使用（Gateway + AnythingLLM 詳細指南）
 
 > 目標：讓你可以把目前專案直接跑成
