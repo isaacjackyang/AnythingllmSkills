@@ -39,6 +39,16 @@ npm run build
 Expected output:
 - Compiled entry file: `dist/index.js`
 
+Build a distributable Windows x64 executable:
+
+```powershell
+# from mcp-open-in-explorer
+npm run package:win-x64
+```
+
+Expected output:
+- `dist/mcp-open-in-explorer-win-x64.exe`
+
 Optional clean rebuild:
 
 ```powershell
@@ -146,6 +156,31 @@ nssm start mcp-open-in-explorer
 ```
 
 > Note: if Explorer interaction is required in an interactive desktop session, Task Scheduler (logon scope) is usually more predictable than service-session execution.
+
+### Option D: run packaged exe (Windows x64)
+
+If you built `dist/mcp-open-in-explorer-win-x64.exe`, you can deploy without requiring Node.js on the target machine:
+
+```powershell
+C:\agent_sandbox\mcp-open-in-explorer\dist\mcp-open-in-explorer-win-x64.exe C:\agent_sandbox
+```
+
+MCP config example:
+
+```json
+{
+  "mcpServers": {
+    "open-in-explorer": {
+      "command": "C:\\agent_sandbox\\mcp-open-in-explorer\\dist\\mcp-open-in-explorer-win-x64.exe",
+      "args": ["C:\\agent_sandbox"]
+    }
+  }
+}
+```
+
+Notes:
+- This executable target is **Windows x64 only**.
+- If the destination machine is Windows ARM64, build a separate ARM64 target.
 
 ---
 
