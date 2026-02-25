@@ -1,122 +1,110 @@
-# local_file_search_open (AnythingLLM Custom Skill)
+# local-file-search-open Skill（超詳細新手說明）
 
-這個 skill 讓 AnythingLLM agent 在回答 RAG 之外，還可以：
+> 目標：讓 AnythingLLM 能在「限定目錄」中安全地做檔案搜尋、讀取、以及開啟檔案定位。
 
-1. 依關鍵字搜尋 Windows 本機檔案（可選整機 / C 槽 / D 槽 / 自訂路徑）
-2. 可選擇直接用檔案總管定位到檔案（`explorer /select,`）
+---
 
-## 檔案結構
+## 1. 這個 Skill 在做什麼？
 
-- `plugin.json`：skill manifest（AnythingLLM v1.11+ 建議使用 `entrypoint.file` 格式）
-- `handler.js`：實際搜尋與開啟檔案總管的執行邏輯
+這個 skill 把三件常見需求包在一起：
 
+1. **search**：找檔案（例如找 `report.pdf`）
+2. **read**：讀檔案文字內容（通常是 txt/md/json 等）
+3. **open**：在本機檔案管理器中直接開啟或定位檔案
 
-> 相容性重點：`handler.js` 採用 `module.exports = { handler }`，且 `handler({ input, logger })` 介面與 v1.11.0-2 可運作的社群 skills 一致。
+你可以把它想成「受管控的本地檔案助手」。
 
-## 參數
+---
 
-- `keyword` (required): 檔名關鍵字（不分大小寫）
-- `searchScope` (optional): 搜尋範圍，`all`（整機）、`c`（C:\）、`d`（D:\）、`custom`（使用 rootPath），預設 `d`
-- `rootPath` (optional): 當 `searchScope=custom` 時的搜尋起始路徑，預設 `D:\`
-- `maxResults` (optional): 最多回傳筆數，預設 20（上限 100）
-- `openExplorer` (optional): 是否開啟檔案總管定位第一筆結果，預設 `false`
+## 2. 為什麼要「受管控」？
 
-## 在 AnythingLLM 的建議操作
+因為 AI 如果可以任意讀你整台電腦，風險非常高。
 
-1. 把 `local-file-search-open` 資料夾放到 AnythingLLM 的 custom skills 目錄。
-2. 在 AnythingLLM 的 Agent / Skill 設定頁啟用此 skill。
-3. 在系統提示詞（System Prompt）加入路由規則，例如：
+所以這個 skill 的核心原則是：
 
-```text
-當使用者詢問「找檔案、搜尋本機、D槽、打開位置、檔案總管」等意圖時，優先呼叫 local-file-search-open skill。
-先用 keyword 搜尋，再把結果摘要回覆使用者；若使用者要求「打開位置」，將 openExplorer 設為 true。
-```
+- **只允許 allowlist 路徑**（白名單資料夾）
+- **拒絕路徑跳脫**（例如 `..` 或奇怪符號繞過）
+- **輸出結構一致**（方便日誌與審計）
 
-## 測試範例
+---
 
-- 搜尋 C 槽：
+## 3. 你需要先準備什麼
 
-```json
-{
-  "keyword": "報價",
-  "searchScope": "c",
-  "maxResults": 10,
-  "openExplorer": false
-}
-```
+- AnythingLLM 可正常運作
+- Skill 能被 AnythingLLM 載入
+- 你已決定安全根目錄（例如 `C:\agent_sandbox` 或 `/srv/agent_sandbox`）
 
-- 搜尋 D 槽並開啟檔案所在位置：
+請先確定你真的有權限存取該目錄。
 
-```json
-{
-  "keyword": "合約",
-  "searchScope": "d",
-  "maxResults": 5,
-  "openExplorer": true
-}
-```
+---
 
-- 搜尋整機（所有可用磁碟）：
+## 4. 建議的操作流程（照做就好）
 
-```json
-{
-  "keyword": "invoice",
-  "searchScope": "all",
-  "maxResults": 20,
-  "openExplorer": false
-}
-```
+1. 先把你要給 AI 存取的檔案都放進 allowlist 目錄。
+2. 啟用 skill 後，先測 `search` 是否只回傳該目錄內容。
+3. 再測 `read`（先讀小檔案，確認編碼與大小限制）。
+4. 最後測 `open`（確認只會開允許路徑）。
 
-- 搜尋自訂路徑：
+不要一開始就把系統根目錄加進 allowlist，這是最常見錯誤。
 
-```json
-{
-  "keyword": "meeting",
-  "searchScope": "custom",
-  "rootPath": "C:\\Users\\你的帳號\\Documents",
-  "maxResults": 10,
-  "openExplorer": false
-}
-```
+---
 
-## 注意事項
+## 5. 常見參數與行為（概念層）
 
-- 此 skill 需在 **Windows 主機**上執行，因為會呼叫 `explorer.exe`。
-- AnythingLLM 若跑在 Docker/Linux，請改成：
-  - 讓 AnythingLLM 透過可存取 Windows 檔案系統的 bridge/service 呼叫，或
-  - 把搜尋與開啟動作改由宿主機 API 代理。
+### search
+- 輸入：關鍵字 / 副檔名 / 路徑範圍
+- 輸出：符合條件的檔案清單（通常含完整路徑）
 
-## 疑難排解：Skill 開啟後又自動變回 Off
+### read
+- 輸入：目標檔案路徑
+- 輸出：文字內容（可能會有最大長度限制）
 
-如果你在 AnythingLLM Desktop（如 v1.8.4）勾選 skill 後，畫面又跳回 Off，常見原因如下：
+### open
+- 輸入：目標檔案路徑
+- 輸出：成功/失敗狀態（由系統打開檔案管理器）
 
-1. **skill 放錯目錄層級**
-   - AnythingLLM 會掃描 `custom skills` 目錄下的每個技能資料夾。
-   - 正確結構應為：`.../custom-skills/local-file-search-open/plugin.json`。
+---
 
-   - `plugin.json` 內的 `name` 使用 `local_file_search_open`（僅英數與底線），避免部份版本對 tool 名稱驗證不通過而導致開關自動回復 Off。
+## 6. 安全建議（務必看）
 
+- allowlist 盡量小：例如只給 `C:\agent_sandbox\docs`
+- 禁止敏感目錄：例如系統目錄、密鑰目錄、使用者主目錄全開放
+- 為 read/search 設定輸出上限，避免一次吐大量內容
+- 每次執行都保留審計紀錄（誰在什麼時間讀了什麼）
 
-2. **`plugin.json` 解析失敗或欄位缺失**
-   - 至少要有 `name`、`version`、`entrypoint`、`parameters` 等基本欄位。
-   - 若 JSON 格式有錯（多逗號、編碼異常）通常會導致技能載入失敗。
+---
 
-3. **`entrypoint` 指向錯誤**
-   - 本技能 `plugin.json` 的 `entrypoint` 是 `handler.js`，檔名必須完全一致。
+## 7. 測試清單（新手可直接照抄）
 
-4. **執行環境不是 Windows 或權限受限**
-   - 這個技能會呼叫 `explorer.exe`，若不是 Windows 主機或遭安全軟體阻擋，可能異常。
+### 功能測試
+1. 搜尋存在檔案（應成功）
+2. 搜尋不存在檔案（應回空）
+3. 讀取文字檔（應看到內容）
+4. open 合法路徑（應成功）
 
-5. **預設路徑不存在（例如沒有 D 槽）**
-   - 本技能預設 `rootPath = D:\\`；若你的電腦沒有 D 槽，會自動 fallback 到 `C:\\` 或其他可用磁碟。
-   - 你仍可在呼叫時明確傳入存在的路徑（例如 `C:\\Users\\你的帳號\\Documents`）。
+### 安全測試
+1. 讀取 allowlist 外路徑（應拒絕）
+2. 使用 `../` 嘗試跳脫（應拒絕）
+3. 讀超大檔案（應被限制或截斷）
 
-6. **桌面版暫存設定異常**
-   - 偶發情況下設定檔損毀會造成 toggle 無法保存，重啟 AnythingLLM 後再重新啟用可先排查。
+---
 
-7. **AnythingLLM 運行在 Linux / Docker（非 Windows）**
-   - 舊版只掃描 `C:\` / `D:\`，在非 Windows 主機會直接失敗，導致看起來像技能異常。
-   - 目前已修正：偵測到非 Windows 時會自動改用 `rootPath`（或目前工作目錄）作為搜尋根目錄，並在回傳 `warning` 說明。
-   - `openExplorer=true` 在非 Windows 會回傳 `explorer.opened=false` 與錯誤說明，不會讓整個 skill 失敗。
+## 8. 故障排除
 
-建議排查順序：先確認資料夾結構與 `plugin.json`/`handler.js` 一致，再檢查主機是否 Windows、`rootPath` 是否存在，最後看 Desktop 日誌中的 skill 載入錯誤訊息。
+### 問題：找不到任何檔案
+- 檢查 allowlist 設定
+- 檢查 skill 進程的執行帳號是否有權限
+
+### 問題：open 沒反應
+- 可能是執行環境無桌面（例如純 server）
+- 或本機未正確配置檔案管理器呼叫
+
+### 問題：讀到亂碼
+- 檢查檔案編碼（UTF-8 / Big5 / UTF-16）
+- 在 skill 端加上編碼處理策略
+
+---
+
+## 9. 一句總結
+
+`local-file-search-open` 的價值不在「能讀檔」，而在「**安全、可控、可稽核地** 讀檔與開檔」。
