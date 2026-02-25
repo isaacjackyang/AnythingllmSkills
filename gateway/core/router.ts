@@ -4,6 +4,7 @@ import { evaluatePolicy } from "./policy/rules";
 import { getProposal, saveProposal } from "./proposals/store";
 import { isToolProposal, type ToolProposal } from "./proposals/schema";
 import { runHttpRequest } from "./tools/http_request";
+import { queueJob } from "./tools/queue_job";
 import type { BrainClient } from "./anythingllm_client";
 
 export async function routeEvent(event: Event, brain: BrainClient): Promise<{ trace_id: string; reply: string }> {
@@ -33,7 +34,15 @@ async function executeProposal(proposal: ToolProposal): Promise<Record<string, u
     case "http_request":
       return runHttpRequest(proposal.inputs as { url: string; method?: string; body?: unknown });
     case "run_job":
-      return { queued: true };
+      return queueJob({
+        name: String((proposal.inputs?.name as string | undefined) ?? "agent_task"),
+        payload: (proposal.inputs?.payload as Record<string, unknown> | undefined) ?? {},
+        trace_id: proposal.trace_id,
+        idempotency_key: proposal.idempotency_key,
+        priority: Number(proposal.inputs?.priority ?? 100),
+        max_attempts: Number(proposal.inputs?.max_attempts ?? 3),
+        scheduled_at: typeof proposal.inputs?.scheduled_at === "string" ? (proposal.inputs.scheduled_at as string) : undefined,
+      });
     case "db_query":
       return { rows: [] };
     case "send_message":
