@@ -70,126 +70,53 @@
 
       .stage {
         position: relative;
-        display: flex;
-        justify-content: center;
-        align-items: flex-end;
         border: 1px solid rgba(148, 163, 184, 0.2);
         border-radius: 20px;
         background: rgba(15, 23, 42, 0.45);
         overflow: hidden;
       }
 
-      .assistant {
-        position: relative;
-        width: 190px;
-        height: 420px;
-        transform-origin: bottom center;
-        animation: sway 2.8s ease-in-out infinite;
+      .stage canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
       }
 
-      .shadow {
+      .stage-controls {
         position: absolute;
-        width: 190px;
-        height: 26px;
-        border-radius: 50%;
-        background: rgba(15, 23, 42, 0.55);
-        bottom: 4px;
-        filter: blur(2px);
-        animation: shadowPulse 2.8s ease-in-out infinite;
-      }
-
-      .head {
-        position: absolute;
-        width: 74px;
-        height: 74px;
-        left: 58px;
-        top: 24px;
-        border-radius: 50%;
-        background: #f8c8b9;
-        z-index: 4;
-      }
-
-      .hair {
-        position: absolute;
-        width: 92px;
-        height: 108px;
-        left: 49px;
-        top: 14px;
-        border-radius: 46px 46px 34px 34px;
-        background: #1f2937;
-        z-index: 3;
-      }
-
-      .body {
-        position: absolute;
-        width: 110px;
-        height: 168px;
-        left: 40px;
-        top: 96px;
-        border-radius: 26px 26px 20px 20px;
-        background: linear-gradient(180deg, #f472b6, #ec4899);
+        top: 0.65rem;
+        left: 0.65rem;
+        right: 0.65rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
         z-index: 2;
       }
 
-      .arms,
-      .legs {
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
+      .upload-label {
+        border: 1px solid rgba(125, 211, 252, 0.45);
+        background: rgba(15, 23, 42, 0.72);
+        border-radius: 8px;
+        padding: 0.32rem 0.55rem;
+        font-size: 0.74rem;
+        color: #bfdbfe;
+        cursor: pointer;
       }
 
-      .arm {
-        position: absolute;
-        width: 24px;
-        height: 110px;
-        top: 112px;
-        border-radius: 16px;
-        background: #f8c8b9;
-        transform-origin: top center;
+      .upload-label input {
+        display: none;
       }
 
-      .arm.left {
-        left: 20px;
-        animation: armWave 2.8s ease-in-out infinite;
+      .motion-btn {
+        border: 1px solid rgba(125, 211, 252, 0.45);
+        background: rgba(15, 23, 42, 0.72);
+        color: #bae6fd;
+        border-radius: 8px;
+        padding: 0.32rem 0.55rem;
+        font-size: 0.74rem;
+        cursor: pointer;
       }
-
-      .arm.right {
-        right: 20px;
-        animation: armWave 2.8s ease-in-out infinite reverse;
-      }
-
-      .leg {
-        position: absolute;
-        width: 30px;
-        height: 150px;
-        bottom: 10px;
-        border-radius: 16px;
-        background: #0f172a;
-        transform-origin: top center;
-      }
-
-      .leg.left {
-        left: 56px;
-        animation: step 1.3s ease-in-out infinite;
-      }
-
-      .leg.right {
-        right: 56px;
-        animation: step 1.3s ease-in-out infinite reverse;
-      }
-
-      .shoe {
-        position: absolute;
-        width: 42px;
-        height: 16px;
-        bottom: -8px;
-        border-radius: 12px;
-        background: #111827;
-      }
-
-      .leg.left .shoe { left: -6px; }
-      .leg.right .shoe { right: -6px; }
 
       .status {
         margin-top: 0.6rem;
@@ -282,26 +209,6 @@
         font-size: 0.95rem;
       }
 
-      @keyframes sway {
-        0%, 100% { transform: translateY(0) rotate(-1deg); }
-        50% { transform: translateY(-4px) rotate(1deg); }
-      }
-
-      @keyframes armWave {
-        0%, 100% { transform: rotate(8deg); }
-        50% { transform: rotate(-16deg); }
-      }
-
-      @keyframes step {
-        0%, 100% { transform: rotate(7deg); }
-        50% { transform: rotate(-8deg); }
-      }
-
-      @keyframes shadowPulse {
-        0%, 100% { transform: scaleX(1); opacity: 0.48; }
-        50% { transform: scaleX(0.86); opacity: 0.3; }
-      }
-
       @media (orientation: landscape) {
         .panel {
           grid-template-columns: 1fr 1fr;
@@ -338,21 +245,14 @@
   </head>
   <body>
     <main class="panel">
-      <section class="stage" aria-label="秘書角色動畫">
-        <div class="assistant" role="img" aria-label="正妹秘書風格全身動畫角色">
-          <div class="hair"></div>
-          <div class="head"></div>
-          <div class="body"></div>
-          <div class="arms">
-            <div class="arm left"></div>
-            <div class="arm right"></div>
-          </div>
-          <div class="legs">
-            <div class="leg left"><span class="shoe"></span></div>
-            <div class="leg right"><span class="shoe"></span></div>
-          </div>
+      <section class="stage" aria-label="照片人物 2D 動作模擬區">
+        <div class="stage-controls">
+          <label class="upload-label">上傳照片
+            <input id="photoInput" type="file" accept="image/*" />
+          </label>
+          <button id="motionToggle" class="motion-btn" type="button">暫停動作</button>
         </div>
-        <div class="shadow"></div>
+        <canvas id="motionCanvas" width="960" height="640" role="img" aria-label="照片人物 2D 骨架動作模擬"></canvas>
       </section>
 
       <section class="dashboard">
@@ -419,6 +319,119 @@
       const resumeBtn = document.getElementById('resumeAgent');
       const stopBtn = document.getElementById('stopAgent');
       const clearConsoleBtn = document.getElementById('clearConsole');
+      const photoInput = document.getElementById('photoInput');
+      const motionToggle = document.getElementById('motionToggle');
+      const motionCanvas = document.getElementById('motionCanvas');
+      const motionCtx = motionCanvas.getContext('2d');
+
+      let runningMotion = true;
+      let backgroundImage = null;
+
+      const basePose = {
+        head: { x: 460, y: 160 },
+        neck: { x: 460, y: 210 },
+        shoulderL: { x: 415, y: 235 },
+        shoulderR: { x: 505, y: 235 },
+        elbowL: { x: 390, y: 300 },
+        elbowR: { x: 540, y: 300 },
+        handL: { x: 368, y: 360 },
+        handR: { x: 580, y: 360 },
+        hip: { x: 460, y: 365 },
+        kneeL: { x: 430, y: 470 },
+        kneeR: { x: 490, y: 470 },
+        footL: { x: 410, y: 590 },
+        footR: { x: 510, y: 590 },
+      };
+
+      const drawBone = (a, b, width = 5, color = '#38bdf8') => {
+        motionCtx.beginPath();
+        motionCtx.moveTo(a.x, a.y);
+        motionCtx.lineTo(b.x, b.y);
+        motionCtx.lineWidth = width;
+        motionCtx.strokeStyle = color;
+        motionCtx.stroke();
+      };
+
+      const drawJoint = (joint, color = '#e2e8f0') => {
+        motionCtx.beginPath();
+        motionCtx.arc(joint.x, joint.y, 5, 0, Math.PI * 2);
+        motionCtx.fillStyle = color;
+        motionCtx.fill();
+      };
+
+      const drawSkeleton = (pose) => {
+        drawBone(pose.head, pose.neck, 3);
+        drawBone(pose.neck, pose.shoulderL);
+        drawBone(pose.neck, pose.shoulderR);
+        drawBone(pose.shoulderL, pose.elbowL);
+        drawBone(pose.elbowL, pose.handL);
+        drawBone(pose.shoulderR, pose.elbowR);
+        drawBone(pose.elbowR, pose.handR);
+        drawBone(pose.neck, pose.hip, 6);
+        drawBone(pose.hip, pose.kneeL);
+        drawBone(pose.kneeL, pose.footL);
+        drawBone(pose.hip, pose.kneeR);
+        drawBone(pose.kneeR, pose.footR);
+        Object.values(pose).forEach((joint) => drawJoint(joint));
+      };
+
+      const loadPhoto = (file) => new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = URL.createObjectURL(file);
+      });
+
+      photoInput.addEventListener('change', async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        try {
+          backgroundImage = await loadPhoto(file);
+          appendLog(`[stage] 已載入照片：${file.name}`);
+        } catch (error) {
+          appendLog(`[error] 照片載入失敗：${error.message}`);
+        }
+      });
+
+      motionToggle.addEventListener('click', () => {
+        runningMotion = !runningMotion;
+        motionToggle.textContent = runningMotion ? '暫停動作' : '繼續動作';
+        if (runningMotion) {
+          requestAnimationFrame(renderMotion);
+        }
+      });
+
+      const renderMotion = (timestamp) => {
+        motionCtx.clearRect(0, 0, motionCanvas.width, motionCanvas.height);
+
+        if (backgroundImage) {
+          const ratio = Math.min(motionCanvas.width / backgroundImage.width, motionCanvas.height / backgroundImage.height);
+          const drawWidth = backgroundImage.width * ratio;
+          const drawHeight = backgroundImage.height * ratio;
+          const x = (motionCanvas.width - drawWidth) / 2;
+          const y = (motionCanvas.height - drawHeight) / 2;
+          motionCtx.drawImage(backgroundImage, x, y, drawWidth, drawHeight);
+        } else {
+          motionCtx.fillStyle = '#0f172a';
+          motionCtx.fillRect(0, 0, motionCanvas.width, motionCanvas.height);
+          motionCtx.fillStyle = '#94a3b8';
+          motionCtx.font = '600 20px "Noto Sans TC", sans-serif';
+          motionCtx.fillText('上傳照片後，可在左側看到 2D 骨架揮手模擬。', 170, 56);
+        }
+
+        const phase = timestamp * 0.004;
+        const pose = structuredClone(basePose);
+        pose.elbowR.y = basePose.elbowR.y - (Math.sin(phase) * 52);
+        pose.handR.y = basePose.handR.y - (Math.sin(phase) * 88);
+        pose.handR.x = basePose.handR.x + (Math.cos(phase) * 22);
+        drawSkeleton(pose);
+
+        if (runningMotion) {
+          requestAnimationFrame(renderMotion);
+        }
+      };
+
+      requestAnimationFrame(renderMotion);
 
       const toLocalTime = (iso) => {
         if (!iso) return '--:--:--';
