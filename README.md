@@ -167,6 +167,9 @@ curl -X POST http://localhost:8787/lifecycle/soul \
 
 - `PORT`：Gateway 監聽埠（預設 `8787`）
 - `TELEGRAM_BOT_TOKEN`：Telegram bot token
+- `TELEGRAM_WEBHOOK_SECRET`：Telegram webhook secret token（建議填）
+- `LINE_CHANNEL_ACCESS_TOKEN`：LINE Messaging API channel access token
+- `LINE_CHANNEL_SECRET`：LINE webhook 驗簽 secret（建議必填）
 - `ANYTHINGLLM_BASE_URL`：AnythingLLM base URL（預設 `http://localhost:3001`）
 - `ANYTHINGLLM_API_KEY`：AnythingLLM API Key（Developer API）
 - `DEFAULT_WORKSPACE`：預設 workspace（預設 `maiecho-prod`）
@@ -179,6 +182,9 @@ curl -X POST http://localhost:8787/lifecycle/soul \
 ```bash
 export PORT=8787
 export TELEGRAM_BOT_TOKEN="123456:abc..."
+export TELEGRAM_WEBHOOK_SECRET="<telegram-webhook-secret>"
+export LINE_CHANNEL_ACCESS_TOKEN="<line-token>"
+export LINE_CHANNEL_SECRET="<line-secret>"
 export ANYTHINGLLM_BASE_URL="http://localhost:3001"
 export ANYTHINGLLM_API_KEY="sk-..."
 export DEFAULT_WORKSPACE="maiecho-prod"
@@ -201,6 +207,9 @@ Gateway ingress endpoint：
 curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://gateway.example.com/ingress/telegram"}'
+
+# 建議加上 secret token（Gateway 會驗證 x-telegram-bot-api-secret-token）
+curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook?url=https://gateway.example.com/ingress/telegram&secret_token=${TELEGRAM_WEBHOOK_SECRET}"
 ```
 
 查詢 webhook：
@@ -208,6 +217,60 @@ curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
 ```bash
 curl "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo"
 ```
+
+---
+
+
+### 4.1) LINE Webhook 設定
+
+Gateway ingress endpoint：
+
+- `POST /ingress/line`
+
+在 LINE Developers Console 將 webhook URL 設為：
+
+```text
+https://gateway.example.com/ingress/line
+```
+
+驗證方式：
+- Gateway 會檢查 `x-line-signature`（有設定 `LINE_CHANNEL_SECRET` 時）。
+- 驗簽失敗會回 `401 invalid line signature`。
+
+---
+
+### 4.2) Web UI 對話下指令
+
+Gateway 提供：
+
+- `POST /api/agent/command`
+
+Request body：
+
+```json
+{ "text": "請幫我總結今天告警並給操作建議" }
+```
+
+這條路徑會將 UI 指令轉成 canonical event（channel=`webhook`），走同一條 router/policy/tool pipeline，最後把 `reply` 回給 UI。
+
+---
+
+### 4.3) 接口開關 API（可獨立開關）
+
+Gateway 提供：
+
+- `GET /api/channels`：讀取 `telegram` / `line` / `web_ui` 開關
+- `POST /api/channels`：更新單一接口開關
+
+範例：關閉 LINE
+
+```bash
+curl -X POST http://localhost:8787/api/channels \
+  -H "Content-Type: application/json" \
+  -d '{"channel":"line","enabled":false}'
+```
+
+關閉後對應 ingress 會回 `503`。
 
 ---
 

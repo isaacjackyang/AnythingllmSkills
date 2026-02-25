@@ -112,6 +112,59 @@
         overflow: hidden;
       }
 
+      .stage-shell {
+        display: grid;
+        grid-template-rows: minmax(180px, 1fr) minmax(140px, 0.36fr);
+        gap: 0.6rem;
+      }
+
+      .stage-chat {
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 16px;
+        background: rgba(15, 23, 42, 0.62);
+        padding: 0.7rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem;
+      }
+
+      .chat-log {
+        margin: 0;
+        flex: 1;
+        min-height: 88px;
+        overflow: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.75rem;
+        color: #bfdbfe;
+        white-space: pre-wrap;
+      }
+
+      .chat-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.5rem;
+      }
+
+      .chat-input {
+        width: 100%;
+        border: 1px solid rgba(125, 211, 252, 0.45);
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.72);
+        color: #e2e8f0;
+        padding: 0.55rem 0.65rem;
+        font-size: 0.84rem;
+      }
+
+      .chat-send {
+        border: 1px solid rgba(125, 211, 252, 0.45);
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.82);
+        color: #bae6fd;
+        font-weight: 700;
+        padding: 0.5rem 0.85rem;
+        cursor: pointer;
+      }
+
       .stage canvas {
         width: 100%;
         height: 100%;
@@ -215,6 +268,49 @@
         flex-wrap: wrap;
       }
 
+      .channel-grid {
+        margin-top: 0.7rem;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.55rem;
+      }
+
+      .channel-card {
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.62);
+        padding: 0.55rem;
+      }
+
+      .channel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+      }
+
+      .channel-name {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #e2e8f0;
+      }
+
+      .channel-state {
+        margin-top: 0.25rem;
+        font-size: 0.72rem;
+        color: #94a3b8;
+      }
+
+      .channel-toggle {
+        border: 1px solid rgba(125, 211, 252, 0.45);
+        background: rgba(15, 23, 42, 0.8);
+        color: #bae6fd;
+        border-radius: 8px;
+        padding: 0.3rem 0.5rem;
+        font-size: 0.72rem;
+        cursor: pointer;
+      }
+
       .ctrl-btn {
         border: 1px solid rgba(125, 211, 252, 0.45);
         background: rgba(15, 23, 42, 0.8);
@@ -303,7 +399,7 @@
           gap: 0.6rem;
         }
 
-        .stage { grid-row: 1; grid-column: 1; }
+        .stage-shell { grid-row: 1; grid-column: 1; }
         .panel-resizer-top {
           grid-row: 1;
           grid-column: 2;
@@ -349,15 +445,26 @@
   </head>
   <body>
     <main class="panel">
-      <section class="stage" aria-label="照片人物 2D 動作模擬區">
-        <div class="stage-controls">
-          <label class="upload-label">上傳照片
-            <input id="photoInput" type="file" accept="image/*" />
-          </label>
-          <button id="motionToggle" class="motion-btn" type="button">暫停動作</button>
-          <button id="pauseAndClearStage" class="motion-btn" type="button">暫停並清畫面</button>
-        </div>
-        <canvas id="motionCanvas" width="960" height="640" role="img" aria-label="照片人物 2D 骨架動作模擬"></canvas>
+      <section class="stage-shell" aria-label="左側工作區">
+        <section class="stage" aria-label="照片人物 2D 動作模擬區">
+          <div class="stage-controls">
+            <label class="upload-label">上傳照片
+              <input id="photoInput" type="file" accept="image/*" />
+            </label>
+            <button id="motionToggle" class="motion-btn" type="button">暫停動作</button>
+            <button id="pauseAndClearStage" class="motion-btn" type="button">暫停並清畫面</button>
+          </div>
+          <canvas id="motionCanvas" width="960" height="640" role="img" aria-label="照片人物 2D 骨架動作模擬"></canvas>
+        </section>
+
+        <section class="stage-chat" aria-label="指令對話框">
+          <h2 style="margin:0;font-size:0.92rem;">Agent 對話輸入框</h2>
+          <pre id="chatLog" class="chat-log">[chat] 可在此輸入指令，送至 Gateway -> AnythingLLM</pre>
+          <form id="chatForm" class="chat-form">
+            <input id="chatInput" class="chat-input" type="text" placeholder="例如：請整理今天告警並提出處置步驟" required />
+            <button id="chatSend" class="chat-send" type="submit">送出</button>
+          </form>
+        </section>
       </section>
 
       <div id="resizerTop" class="resizer panel-resizer-top" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="調整上方與中間區塊高度"></div>
@@ -399,6 +506,34 @@
               <button id="stopAgent" class="ctrl-btn stop" type="button">停止 Agent</button>
               <button id="clearConsole" class="ctrl-btn" type="button">清除 Console</button>
             </div>
+
+            <article class="flow-card" aria-label="連入接口控制">
+              <h3>連入接口卡片與開關</h3>
+              <p class="flow-help">可獨立啟用/停用每個接口；停用後該接口 ingress 會回傳 503。</p>
+              <div class="channel-grid">
+                <section class="channel-card" data-channel-card="telegram">
+                  <div class="channel-head">
+                    <span class="channel-name">Telegram</span>
+                    <button class="channel-toggle" data-channel-toggle="telegram" type="button">切換</button>
+                  </div>
+                  <div id="channelStateTelegram" class="channel-state">狀態讀取中...</div>
+                </section>
+                <section class="channel-card" data-channel-card="line">
+                  <div class="channel-head">
+                    <span class="channel-name">LINE</span>
+                    <button class="channel-toggle" data-channel-toggle="line" type="button">切換</button>
+                  </div>
+                  <div id="channelStateLine" class="channel-state">狀態讀取中...</div>
+                </section>
+                <section class="channel-card" data-channel-card="web_ui">
+                  <div class="channel-head">
+                    <span class="channel-name">Web UI</span>
+                    <button class="channel-toggle" data-channel-toggle="web_ui" type="button">切換</button>
+                  </div>
+                  <div id="channelStateWebUi" class="channel-state">狀態讀取中...</div>
+                </section>
+              </div>
+            </article>
 
             <article class="flow-card" aria-label="API 資料流">
               <h3>API 資料流拓樸（卡片式）</h3>
@@ -447,10 +582,17 @@
       const resumeBtn = document.getElementById('resumeAgent');
       const stopBtn = document.getElementById('stopAgent');
       const clearConsoleBtn = document.getElementById('clearConsole');
+      const channelStateTelegram = document.getElementById('channelStateTelegram');
+      const channelStateLine = document.getElementById('channelStateLine');
+      const channelStateWebUi = document.getElementById('channelStateWebUi');
+      const channelToggleButtons = document.querySelectorAll('[data-channel-toggle]');
       const flowSvg = document.getElementById('flowSvg');
       const photoInput = document.getElementById('photoInput');
       const motionToggle = document.getElementById('motionToggle');
       const pauseAndClearStageBtn = document.getElementById('pauseAndClearStage');
+      const chatForm = document.getElementById('chatForm');
+      const chatInput = document.getElementById('chatInput');
+      const chatLog = document.getElementById('chatLog');
       const motionCanvas = document.getElementById('motionCanvas');
       const motionCtx = motionCanvas.getContext('2d');
       const panelEl = document.querySelector('.panel');
@@ -613,6 +755,11 @@
           targetLog.textContent += `\n${text}`;
           targetLog.scrollTop = targetLog.scrollHeight;
         });
+      };
+
+      const appendChatLog = (speaker, text) => {
+        chatLog.textContent += `\n[${speaker}] ${text}`;
+        chatLog.scrollTop = chatLog.scrollHeight;
       };
 
       const pad2 = (value) => String(value).padStart(2, '0');
@@ -811,6 +958,45 @@
         renderFlow(data);
       };
 
+      const renderChannels = (channels) => {
+        const mapping = {
+          telegram: channelStateTelegram,
+          line: channelStateLine,
+          web_ui: channelStateWebUi,
+        };
+
+        Object.entries(mapping).forEach(([key, target]) => {
+          const item = channels[key];
+          if (!item) return;
+          target.textContent = item.enabled ? '目前：啟用' : '目前：停用';
+          target.style.color = item.enabled ? '#67e8f9' : '#fda4af';
+          const button = document.querySelector(`[data-channel-toggle="${key}"]`);
+          if (button) button.textContent = item.enabled ? '關閉' : '開啟';
+        });
+      };
+
+      const refreshChannels = async () => {
+        const response = await fetch('/api/channels');
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || '讀取接口狀態失敗');
+        }
+        renderChannels(payload.data);
+      };
+
+      const toggleChannel = async (channel, enabled) => {
+        const response = await fetch('/api/channels', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel, enabled }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || '切換接口失敗');
+        }
+        renderChannels(payload.data);
+      };
+
       const refreshState = async () => {
         const response = await fetch('/api/agent/control');
         const payload = await response.json();
@@ -832,6 +1018,19 @@
         }
         applyControlState(payload.data);
         return payload.data;
+      };
+
+      const sendCommand = async (text) => {
+        const response = await fetch('/api/agent/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || '發送指令失敗');
+        }
+        return payload.reply;
       };
 
       button.addEventListener('click', async () => {
@@ -877,6 +1076,50 @@
           status.textContent = `停止失敗：${error.message}`;
           appendLog(`[error] 停止失敗：${error.message}`);
         }
+      });
+
+
+      chatForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const text = chatInput.value.trim();
+        if (!text) return;
+
+        chatInput.disabled = true;
+        appendChatLog('user', text);
+        appendLog(`[command] UI 指令送出：${text}`);
+
+        try {
+          const reply = await sendCommand(text);
+          appendChatLog('agent', reply);
+          status.textContent = '已收到 Agent 回覆。';
+          appendLog('[command] 指令完成');
+        } catch (error) {
+          appendChatLog('error', error.message);
+          status.textContent = `指令失敗：${error.message}`;
+          appendLog(`[error] 指令失敗：${error.message}`);
+        } finally {
+          chatInput.disabled = false;
+          chatInput.value = '';
+          chatInput.focus();
+        }
+      });
+
+      channelToggleButtons.forEach((buttonEl) => {
+        buttonEl.addEventListener('click', async () => {
+          const channel = buttonEl.dataset.channelToggle;
+          const currentLabel = buttonEl.textContent;
+          const nextEnabled = currentLabel === '開啟';
+          buttonEl.disabled = true;
+          try {
+            await toggleChannel(channel, nextEnabled);
+            appendLog(`[channel] ${channel} 已${nextEnabled ? '開啟' : '關閉'}`);
+          } catch (error) {
+            status.textContent = `接口切換失敗：${error.message}`;
+            appendLog(`[error] 接口切換失敗：${error.message}`);
+          } finally {
+            buttonEl.disabled = false;
+          }
+        });
       });
 
       clearConsoleBtn.addEventListener('click', () => {
@@ -1005,7 +1248,7 @@
         },
       });
 
-      refreshState()
+      Promise.all([refreshState(), refreshChannels()])
         .then(() => appendLog('[system] 已連線 Gateway 控制 API'))
         .catch((error) => {
           status.textContent = `無法連線控制 API：${error.message}`;
