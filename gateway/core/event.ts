@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-export type Channel = "telegram" | "discord" | "slack" | "line" | "webhook" | "scheduler";
+export type Channel = "telegram" | "discord" | "slack" | "line" | "webhook" | "web_ui" | "scheduler";
 
 export interface Event {
   trace_id: string;

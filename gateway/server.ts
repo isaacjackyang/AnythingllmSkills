@@ -174,7 +174,7 @@ const server = createServer(async (req, res) => {
       if (!text) throw new Error("text is required");
 
       const event = createEvent({
-        channel: "webhook",
+        channel: "web_ui",
         sender: {
           id: "approval-ui",
           display: "Approval UI",
@@ -192,6 +192,7 @@ const server = createServer(async (req, res) => {
       });
 
       const result = await routeEvent(event, brain);
+      await sendReplyByChannel(event, result.reply);
 
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
@@ -259,7 +260,7 @@ const server = createServer(async (req, res) => {
       const raw = await readBody(req);
       const event = connector.toEvent(JSON.parse(raw));
       const result = await routeEvent(event, brain);
-      await connector.sendReply(event.conversation.thread_id, result.reply);
+      await sendReplyByChannel(event, result.reply);
 
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ ok: true, trace_id: event.trace_id }));
@@ -292,7 +293,7 @@ const server = createServer(async (req, res) => {
 
       const event = lineConnector.toEvent(JSON.parse(raw));
       const result = await routeEvent(event, brain);
-      await lineConnector.sendReply(event.conversation.thread_id, result.reply);
+      await sendReplyByChannel(event, result.reply);
 
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ ok: true, trace_id: event.trace_id }));
@@ -359,6 +360,22 @@ const server = createServer(async (req, res) => {
 server.listen(port, () => {
   console.log(`Gateway listening on :${port}`);
 });
+
+
+async function sendReplyByChannel(event: import("./core/event").Event, reply: string): Promise<void> {
+  switch (event.channel) {
+    case "telegram":
+      await connector.sendReply(event.conversation.thread_id, reply);
+      return;
+    case "line":
+      await lineConnector.sendReply(event.conversation.thread_id, reply);
+      return;
+    case "web_ui":
+      return;
+    default:
+      throw new Error(`unsupported reply channel: ${event.channel}`);
+  }
+}
 
 function readBody(req: import("node:http").IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {

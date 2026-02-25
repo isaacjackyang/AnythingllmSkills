@@ -34,7 +34,7 @@ Gateway 主要做 6 件事：
 
 請先確認：
 
-```bash
+```powershell
 node -v
 npm -v
 npx -v
@@ -48,7 +48,7 @@ npx -v
 
 在 repo 根目錄執行：
 
-```bash
+```powershell
 npx tsx gateway/server.ts
 ```
 
@@ -56,9 +56,9 @@ npx tsx gateway/server.ts
 
 檢查：
 
-```bash
-curl http://localhost:8787/healthz
-curl http://localhost:8787/lifecycle
+```powershell
+Invoke-RestMethod http://localhost:8787/healthz
+Invoke-RestMethod http://localhost:8787/lifecycle
 ```
 
 ---

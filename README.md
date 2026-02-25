@@ -44,7 +44,7 @@
 
 檢查指令：
 
-```bash
+```powershell
 node -v
 npm -v
 npx -v
@@ -58,8 +58,8 @@ npx -v
 
 本 repo 內建腳本：
 
-```bash
-bash scripts/bootstrap_gateway.sh
+```powershell
+.\scripts\bootstrap_gateway.ps1
 ```
 
 它會做幾件事：
@@ -72,29 +72,29 @@ bash scripts/bootstrap_gateway.sh
 
 如果你只是想看環境變數模板：
 
-```bash
-bash scripts/bootstrap_gateway.sh --print-env
+```powershell
+.\scripts\bootstrap_gateway.ps1 -PrintEnv
 ```
 
 如果你公司網路限制 npm 安裝：
 
-```bash
-bash scripts/bootstrap_gateway.sh --skip-tooling
+```powershell
+.\scripts\bootstrap_gateway.ps1 -SkipTooling
 ```
 
 ---
 
 ## 5. 啟動 Gateway（最小路徑）
 
-```bash
+```powershell
 npx tsx gateway/server.ts
 ```
 
 啟動後，先做健康檢查：
 
-```bash
-curl http://localhost:8787/healthz
-curl http://localhost:8787/lifecycle
+```powershell
+Invoke-RestMethod http://localhost:8787/healthz
+Invoke-RestMethod http://localhost:8787/lifecycle
 ```
 
 如果第一個就不通，先不要看 Telegram、不要看 Skill。先把 Gateway 本身跑起來。
