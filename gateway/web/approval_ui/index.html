@@ -582,15 +582,13 @@
   <body>
     <main class="panel">
       <section class="stage-shell" aria-label="左側工作區">
-        <section class="stage" aria-label="照片人物 2D 動作模擬區" data-collapsible data-collapsible-label="助手動畫區">
+        <section class="stage" aria-label="Pixel Agent 動畫區" data-collapsible data-collapsible-label="助手動畫區">
           <div class="stage-controls">
-            <label class="upload-label">上傳照片
-              <input id="photoInput" type="file" accept="image/*" />
-            </label>
+            <span class="upload-label">Pixel Agent 動畫（GitHub sprite 風格）</span>
             <button id="motionToggle" class="motion-btn" type="button">暫停動作</button>
             <button id="pauseAndClearStage" class="motion-btn" type="button">暫停並清畫面</button>
           </div>
-          <canvas id="motionCanvas" width="960" height="640" role="img" aria-label="照片人物 2D 骨架動作模擬"></canvas>
+          <canvas id="motionCanvas" width="960" height="640" role="img" aria-label="Pixel Agent 像素角色動畫"></canvas>
         </section>
 
         <div id="stageResizer" class="resizer stage-shell-resizer" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="調整助手動畫區與 Agent 對話輸入框高度"></div>
@@ -725,7 +723,6 @@
       const channelStateWebUi = document.getElementById('channelStateWebUi');
       const channelToggleButtons = document.querySelectorAll('[data-channel-toggle]');
       const flowSvg = document.getElementById('flowSvg');
-      const photoInput = document.getElementById('photoInput');
       const motionToggle = document.getElementById('motionToggle');
       const pauseAndClearStageBtn = document.getElementById('pauseAndClearStage');
       const chatForm = document.getElementById('chatForm');
@@ -841,7 +838,6 @@
       };
 
       let runningMotion = true;
-      let backgroundImage = null;
 
       initializeResizableBlocks();
       initializeCollapsibleBlocks();
@@ -869,72 +865,184 @@
       let flowLastControlState = null;
       let flowDragState = null;
 
-      const basePose = {
-        head: { x: 460, y: 160 },
-        neck: { x: 460, y: 210 },
-        shoulderL: { x: 415, y: 235 },
-        shoulderR: { x: 505, y: 235 },
-        elbowL: { x: 390, y: 300 },
-        elbowR: { x: 540, y: 300 },
-        handL: { x: 368, y: 360 },
-        handR: { x: 580, y: 360 },
-        hip: { x: 460, y: 365 },
-        kneeL: { x: 430, y: 470 },
-        kneeR: { x: 490, y: 470 },
-        footL: { x: 410, y: 590 },
-        footR: { x: 510, y: 590 },
+      const pixelSize = 8;
+      const agentPalette = {
+        skin: '#f8d4b6',
+        skinShadow: '#e6b892',
+        hair: '#3b2f2f',
+        hairDark: '#1f1714',
+        eye: '#111827',
+        mouth: '#e11d48',
+        dress: '#ec4899',
+        dressShade: '#be185d',
+        sleeve: '#f9a8d4',
+        legs: '#f2c19a',
+        heel: '#111827',
+        outline: '#020617',
+        glow: '#38bdf8',
       };
 
-      const drawBone = (a, b, width = 5, color = '#38bdf8') => {
-        motionCtx.beginPath();
-        motionCtx.moveTo(a.x, a.y);
-        motionCtx.lineTo(b.x, b.y);
-        motionCtx.lineWidth = width;
-        motionCtx.strokeStyle = color;
-        motionCtx.stroke();
-      };
-
-      const drawJoint = (joint, color = '#e2e8f0') => {
-        motionCtx.beginPath();
-        motionCtx.arc(joint.x, joint.y, 5, 0, Math.PI * 2);
+      const drawPixelRect = (x, y, w, h, color) => {
+        if (!color) return;
         motionCtx.fillStyle = color;
+        motionCtx.fillRect(
+          Math.round(x) * pixelSize,
+          Math.round(y) * pixelSize,
+          Math.max(1, Math.round(w)) * pixelSize,
+          Math.max(1, Math.round(h)) * pixelSize,
+        );
+      };
+
+      const drawPixelAgent = (anchorX, anchorY, frame) => {
+        const px = (ox, oy, w, h, color) => drawPixelRect(anchorX + ox, anchorY + oy, w, h, color);
+
+        const bodyBob = Math.round(frame.bodyBob);
+        const armSwing = Math.round(frame.armSwing);
+        const legSwing = Math.round(frame.legSwing);
+        const mouthOpen = Math.max(0, Math.round(frame.mouthOpen));
+
+        const y = bodyBob;
+        const leftLegStep = Math.max(0, legSwing);
+        const rightLegStep = Math.max(0, -legSwing);
+
+        // 長髮（後側）
+        px(7, 1 + y, 8, 1, agentPalette.hairDark);
+        px(6, 2 + y, 10, 2, agentPalette.hair);
+        px(6, 4 + y, 2, 8, agentPalette.hairDark);
+        px(14, 4 + y, 2, 8, agentPalette.hairDark);
+
+        // 臉部
+        px(8, 3 + y, 6, 5, agentPalette.skin);
+        px(8, 8 + y, 6, 1, agentPalette.skinShadow);
+        px(8, 3 + y, 1, 6, agentPalette.outline);
+        px(13, 3 + y, 1, 6, agentPalette.outline);
+
+        // 五官
+        px(9, 5 + y, 1, 1, agentPalette.eye);
+        px(12, 5 + y, 1, 1, agentPalette.eye);
+        px(10, 7 + y, 2, 1 + mouthOpen, agentPalette.mouth);
+
+        // 肩膀與洋裝上身
+        px(8, 9 + y, 6, 1, agentPalette.sleeve);
+        px(8, 10 + y, 6, 2, agentPalette.dress);
+
+        // 手臂
+        px(6 - armSwing, 10 + y, 2, 2, agentPalette.sleeve);
+        px(5 - armSwing, 12 + y, 2, 3, agentPalette.skin);
+        px(14 + armSwing, 10 + y, 2, 2, agentPalette.sleeve);
+        px(15 + armSwing, 12 + y, 2, 3, agentPalette.skin);
+
+        // 洋裝裙襬（A-line）
+        px(7, 12 + y, 8, 2, agentPalette.dress);
+        px(6, 14 + y, 10, 2, agentPalette.dress);
+        px(5, 16 + y, 12, 2, agentPalette.dressShade);
+
+        // 雙腿（修復：腿明確畫在裙襬下方）
+        px(8, 18 + y, 2, 3 + leftLegStep, agentPalette.legs);
+        px(12, 18 + y, 2, 3 + rightLegStep, agentPalette.legs);
+
+        // 高跟鞋
+        px(8, 21 + y + leftLegStep, 2, 1, agentPalette.heel);
+        px(12, 21 + y + rightLegStep, 2, 1, agentPalette.heel);
+        px(9, 22 + y + leftLegStep, 2, 1, agentPalette.heel);
+        px(13, 22 + y + rightLegStep, 2, 1, agentPalette.heel);
+
+        // 輪廓強化
+        px(5, 16 + y, 1, 7, agentPalette.outline);
+        px(16, 16 + y, 1, 7, agentPalette.outline);
+      };
+
+      const drawSpeechBubble = (x, y, text, pulse) => {
+        motionCtx.save();
+        motionCtx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+        motionCtx.strokeStyle = 'rgba(103, 232, 249, 0.9)';
+        motionCtx.lineWidth = 2;
+        motionCtx.beginPath();
+        motionCtx.roundRect(x, y, 220, 72, 12);
         motionCtx.fill();
+        motionCtx.stroke();
+
+        motionCtx.fillStyle = '#a5f3fc';
+        motionCtx.font = '700 18px "Noto Sans TC", sans-serif';
+        motionCtx.fillText(text, x + 16, y + 43);
+
+        motionCtx.fillStyle = `rgba(56, 189, 248, ${0.25 + pulse * 0.2})`;
+        motionCtx.beginPath();
+        motionCtx.arc(x + 210, y + 16, 6 + pulse * 3, 0, Math.PI * 2);
+        motionCtx.fill();
+        motionCtx.restore();
       };
 
-      const drawSkeleton = (pose) => {
-        drawBone(pose.head, pose.neck, 3);
-        drawBone(pose.neck, pose.shoulderL);
-        drawBone(pose.neck, pose.shoulderR);
-        drawBone(pose.shoulderL, pose.elbowL);
-        drawBone(pose.elbowL, pose.handL);
-        drawBone(pose.shoulderR, pose.elbowR);
-        drawBone(pose.elbowR, pose.handR);
-        drawBone(pose.neck, pose.hip, 6);
-        drawBone(pose.hip, pose.kneeL);
-        drawBone(pose.kneeL, pose.footL);
-        drawBone(pose.hip, pose.kneeR);
-        drawBone(pose.kneeR, pose.footR);
-        Object.values(pose).forEach((joint) => drawJoint(joint));
+      const drawThoughtBubble = (x, y, pulse) => {
+        motionCtx.save();
+        motionCtx.fillStyle = 'rgba(148, 163, 184, 0.18)';
+        motionCtx.strokeStyle = 'rgba(191, 219, 254, 0.85)';
+        motionCtx.lineWidth = 2;
+        motionCtx.beginPath();
+        motionCtx.ellipse(x, y, 80 + pulse * 8, 34 + pulse * 4, 0, 0, Math.PI * 2);
+        motionCtx.fill();
+        motionCtx.stroke();
+
+        motionCtx.beginPath();
+        motionCtx.arc(x - 72, y + 34, 9, 0, Math.PI * 2);
+        motionCtx.fill();
+        motionCtx.stroke();
+
+        motionCtx.beginPath();
+        motionCtx.arc(x - 90, y + 50, 6, 0, Math.PI * 2);
+        motionCtx.fill();
+        motionCtx.stroke();
+
+        motionCtx.fillStyle = '#dbeafe';
+        motionCtx.font = '700 16px "Noto Sans TC", sans-serif';
+        motionCtx.fillText('分析中...', x - 42, y + 6);
+        motionCtx.restore();
       };
 
-      const loadPhoto = (file) => new Promise((resolve, reject) => {
-        const image = new Image();
-        image.onload = () => resolve(image);
-        image.onerror = reject;
-        image.src = URL.createObjectURL(file);
-      });
+      const resolveAnimationState = (timestamp) => {
+        const seconds = timestamp / 1000;
+        const phase = seconds % 18;
 
-      photoInput.addEventListener('change', async (event) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-        try {
-          backgroundImage = await loadPhoto(file);
-          appendLog(`[stage] 已載入照片：${file.name}`);
-        } catch (error) {
-          appendLog(`[error] 照片載入失敗：${error.message}`);
+        if (phase < 6) {
+          const t = phase * 3.2;
+          return {
+            mode: 'walk',
+            stageText: '走動巡邏模式',
+            horizontalShift: Math.sin(phase * 0.7) * 2.8,
+            bodyBob: Math.sin(t) * 0.8,
+            armSwing: Math.sin(t) * 1.8,
+            legSwing: Math.sin(t + Math.PI) * 1.6,
+            mouthOpen: 0,
+            pulse: (Math.sin(t) + 1) / 2,
+          };
         }
-      });
 
+        if (phase < 12) {
+          const t = (phase - 6) * 4.5;
+          return {
+            mode: 'talk',
+            stageText: '對話回覆模式',
+            horizontalShift: 0,
+            bodyBob: Math.sin(t * 0.35) * 0.6,
+            armSwing: 1 + Math.sin(t) * 1.2,
+            legSwing: 0,
+            mouthOpen: (Math.sin(t) + 1) * 0.9,
+            pulse: (Math.sin(t * 0.8) + 1) / 2,
+          };
+        }
+
+        const t = (phase - 12) * 2.1;
+        return {
+          mode: 'think',
+          stageText: '思考規劃模式',
+          horizontalShift: Math.sin(t * 0.45) * 1.5,
+          bodyBob: Math.sin(t * 0.6) * 0.5,
+          armSwing: -1,
+          legSwing: 0,
+          mouthOpen: 0,
+          pulse: (Math.sin(t) + 1) / 2,
+        };
+      };
       motionToggle.addEventListener('click', () => {
         runningMotion = !runningMotion;
         motionToggle.textContent = runningMotion ? '暫停動作' : '繼續動作';
@@ -951,36 +1059,47 @@
 
       pauseAndClearStageBtn.addEventListener('click', () => {
         runningMotion = false;
-        backgroundImage = null;
         motionToggle.textContent = '繼續動作';
         clearStageCanvas();
-        appendLog('[stage] 已暫停動畫並清除左側畫面');
+        appendLog('[stage] 已暫停 Pixel Agent 動畫並清除左側畫面');
       });
 
       const renderMotion = (timestamp) => {
         motionCtx.clearRect(0, 0, motionCanvas.width, motionCanvas.height);
 
-        if (backgroundImage) {
-          const ratio = Math.min(motionCanvas.width / backgroundImage.width, motionCanvas.height / backgroundImage.height);
-          const drawWidth = backgroundImage.width * ratio;
-          const drawHeight = backgroundImage.height * ratio;
-          const x = (motionCanvas.width - drawWidth) / 2;
-          const y = (motionCanvas.height - drawHeight) / 2;
-          motionCtx.drawImage(backgroundImage, x, y, drawWidth, drawHeight);
-        } else {
-          motionCtx.fillStyle = '#0f172a';
-          motionCtx.fillRect(0, 0, motionCanvas.width, motionCanvas.height);
-          motionCtx.fillStyle = '#94a3b8';
-          motionCtx.font = '600 20px "Noto Sans TC", sans-serif';
-          motionCtx.fillText('上傳照片後，可在左側看到 2D 骨架揮手模擬。', 170, 56);
-        }
+        const gradient = motionCtx.createLinearGradient(0, 0, motionCanvas.width, motionCanvas.height);
+        gradient.addColorStop(0, '#f3f4f6');
+        gradient.addColorStop(1, '#d1d5db');
+        motionCtx.fillStyle = gradient;
+        motionCtx.fillRect(0, 0, motionCanvas.width, motionCanvas.height);
 
-        const phase = timestamp * 0.004;
-        const pose = structuredClone(basePose);
-        pose.elbowR.y = basePose.elbowR.y - (Math.sin(phase) * 52);
-        pose.handR.y = basePose.handR.y - (Math.sin(phase) * 88);
-        pose.handR.x = basePose.handR.x + (Math.cos(phase) * 22);
-        drawSkeleton(pose);
+        const state = resolveAnimationState(timestamp);
+        const spriteWidthCells = 24;
+        const spriteHeightCells = 28;
+        const canvasWidthCells = motionCanvas.width / pixelSize;
+        const canvasHeightCells = motionCanvas.height / pixelSize;
+
+        const baseCellX = Math.floor(((canvasWidthCells - spriteWidthCells) / 2) + state.horizontalShift);
+        const baseCellY = Math.floor(((canvasHeightCells - spriteHeightCells) / 2) + 2);
+        const basePixelX = baseCellX * pixelSize;
+        const basePixelY = baseCellY * pixelSize;
+
+        drawPixelAgent(baseCellX, baseCellY, state);
+
+        motionCtx.fillStyle = '#94a3b8';
+        motionCtx.font = '600 18px "Noto Sans TC", sans-serif';
+        motionCtx.fillText(`Pixel Agent 女生（${state.stageText}）`, 80, 56);
+
+        motionCtx.fillStyle = `rgba(56, 189, 248, ${0.22 + state.pulse * 0.3})`;
+        motionCtx.beginPath();
+        motionCtx.ellipse(basePixelX + (12 * pixelSize), basePixelY + (28 * pixelSize) + 14, 74 + state.pulse * 16, 18, 0, 0, Math.PI * 2);
+        motionCtx.fill();
+
+        if (state.mode === 'talk') {
+          drawSpeechBubble(basePixelX + 190, basePixelY + 30, '正在回答你的問題', state.pulse);
+        } else if (state.mode === 'think') {
+          drawThoughtBubble(basePixelX + 216, basePixelY - 8, state.pulse);
+        }
 
         if (runningMotion) {
           requestAnimationFrame(renderMotion);
