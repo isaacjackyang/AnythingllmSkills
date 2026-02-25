@@ -24,7 +24,7 @@ This Gateway follows the requested control-plane split:
   - `propose()`: enforces proposal-only prompt and parses JSON output.
   - `summarize()`: summarizes tool results for channel reply.
 - `server.ts`
-  - Exposes `POST /ingress/telegram`, `POST /ingress/line`, `POST /api/agent/command`, `GET/POST /api/channels`, `GET /healthz`, `GET /lifecycle`, and `POST /lifecycle/soul`.
+  - Exposes `POST /ingress/telegram`, `POST /ingress/line`, `POST /api/agent/command`, `GET/POST /api/channels`, task APIs (`GET /api/tasks`, `POST /api/tasks/run-once`, `GET /api/tasks/:id`, `POST /api/tasks/:id/cancel`, `DELETE /api/tasks/:id`), `GET /healthz`, `GET /lifecycle`, and `POST /lifecycle/soul`.
   - Wires connectors + router + AnythingLLM client end-to-end.
 
 Core files:
@@ -34,6 +34,9 @@ Core files:
 - `core/proposals/schema.ts`: strict Proposal contract.
 - `core/policy/rules.ts`: auto / need-approval / reject decisions.
 - `core/tools/http_request.ts`: allowlist + timeout baseline.
+- `core/tools/queue_job.ts`: durable task enqueue tool backed by JSON DB.
+- `core/tasks/store.ts`: persistent queue DB + task state machine + claim/retry.
+- `workers/job_runner.ts`: worker claim/execute/retry loop for queued jobs.
 - `core/audit/*`: traceable stage logging.
 
 ## Environment variables
@@ -49,13 +52,15 @@ Core files:
 - `DEFAULT_WORKSPACE` (default `maiecho-prod`)
 - `DEFAULT_AGENT` (default `ops-agent`)
 - `SOUL_ROLE` (default `gateway`)
+- `TASK_DB_PATH` (default `gateway/data/task_queue_db.json`)
+- `TASK_RUNNER_INTERVAL_MS` (default `2000`)
+- `TASK_WORKER_ID` (default `worker-<pid>`)
 
 ## Next steps by phase
 
 1. Implement durable storage for proposals/audit.
 2. Add approval API + UI action callbacks for high-risk proposals.
-3. Add scheduler/webhook ingress and shared event path.
-4. Fill `discord/slack` connectors with production auth + identity mapping.
+3. Fill `discord/slack` connectors with production auth + identity mapping.
 
 
 ## Lifecycle / Heartbeat / Soul

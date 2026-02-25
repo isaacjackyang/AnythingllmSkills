@@ -9,6 +9,8 @@ import { routeEvent } from "./core/router";
 import { applyAgentControl, getAgentControlSnapshot } from "./core/agent_control";
 import { createEvent } from "./core/event";
 import { getChannelSnapshot, isChannelEnabled, setChannelEnabled } from "./core/channel_control";
+import { cancelTask, deleteTask, getTaskById, listTasks } from "./core/tasks/store";
+import { runQueuedJobsOnce, startJobRunner } from "./workers/job_runner";
 
 const port = Number(process.env.PORT ?? 8787);
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN ?? "";
@@ -26,6 +28,7 @@ if (!lineChannelAccessToken) console.warn("LINE_CHANNEL_ACCESS_TOKEN is empty: l
 if (!anythingApiKey) console.warn("ANYTHINGLLM_API_KEY is empty: brain calls will fail");
 
 startHeartbeat(heartbeatIntervalMs);
+startJobRunner(Number(process.env.TASK_RUNNER_INTERVAL_MS ?? 2000));
 
 const connector = new TelegramConnector({
   botToken: telegramToken,
@@ -114,6 +117,43 @@ const server = createServer(async (req, res) => {
       return;
     } catch (error) {
       res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: (error as Error).message }));
+      return;
+    }
+  }
+
+  if (req.method === "GET") {
+    try {
+      const requestUrl = new URL(req.url ?? "/", "http://localhost");
+      if (requestUrl.pathname === "/api/tasks") {
+        const statusParam = requestUrl.searchParams.get("status");
+        const limitParam = requestUrl.searchParams.get("limit");
+        const status = statusParam ?? undefined;
+        const limit = limitParam ? Number(limitParam) : undefined;
+        const tasks = await listTasks({ status: status as import("./core/tasks/store").TaskStatus | undefined, limit });
+        res.statusCode = 200;
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ ok: true, data: tasks }));
+        return;
+      }
+    } catch (error) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: (error as Error).message }));
+      return;
+    }
+  }
+
+  if (req.method === "POST" && req.url === "/api/tasks/run-once") {
+    try {
+      await runQueuedJobsOnce();
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    } catch (error) {
+      res.statusCode = 500;
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ ok: false, error: (error as Error).message }));
       return;
@@ -259,6 +299,53 @@ const server = createServer(async (req, res) => {
       return;
     } catch (error) {
       res.statusCode = 500;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: (error as Error).message }));
+      return;
+    }
+  }
+
+  if (req.url?.startsWith("/api/tasks/")) {
+    const taskId = req.url.split("/").filter(Boolean)[2];
+    if (!taskId) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: "task id is required" }));
+      return;
+    }
+
+    try {
+      if (req.method === "GET") {
+        const task = await getTaskById(taskId);
+        if (!task) {
+          res.statusCode = 404;
+          res.setHeader("content-type", "application/json");
+          res.end(JSON.stringify({ ok: false, error: "task not found" }));
+          return;
+        }
+        res.statusCode = 200;
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ ok: true, data: task }));
+        return;
+      }
+
+      if (req.method === "POST" && req.url.endsWith("/cancel")) {
+        const cancelled = await cancelTask(taskId);
+        res.statusCode = 200;
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ ok: true, data: cancelled }));
+        return;
+      }
+
+      if (req.method === "DELETE") {
+        const deleted = await deleteTask(taskId);
+        res.statusCode = deleted ? 200 : 404;
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ ok: deleted }));
+        return;
+      }
+    } catch (error) {
+      res.statusCode = 400;
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ ok: false, error: (error as Error).message }));
       return;
