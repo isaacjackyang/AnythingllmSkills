@@ -223,6 +223,13 @@
         overflow: hidden;
       }
 
+      .console,
+      .console-landscape {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
       .monitor {
         margin-top: 0.6rem;
         display: grid;
@@ -423,18 +430,27 @@
 
       .console-log {
         margin: 0;
-        height: 100%;
-        overflow: auto;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 0.76rem;
         line-height: 1.45;
         color: #bfdbfe;
         white-space: pre-wrap;
+        word-break: break-word;
       }
 
       .console h2 {
         margin: 0 0 0.5rem;
         font-size: 0.95rem;
+      }
+
+      #consolePane,
+      .console-landscape.collapsible-block {
+        flex: 1 1 auto;
+        min-height: 0;
       }
 
       .flow-card {
@@ -489,23 +505,41 @@
 
       @media (orientation: landscape) {
         .panel {
-          grid-template-columns: minmax(320px, var(--panel-c1)) 10px minmax(320px, var(--panel-c2));
+          grid-template-columns: minmax(320px, var(--panel-c1)) 14px minmax(320px, var(--panel-c2));
           grid-template-rows: 1fr;
           gap: 0.6rem;
         }
 
-        .stage-shell { grid-row: 1; grid-column: 1; }
+        .stage-shell {
+          grid-row: 1;
+          grid-column: 1;
+          min-width: 0;
+        }
         .panel-resizer-top {
           grid-row: 1;
           grid-column: 2;
+          display: block;
+          min-width: 14px;
+          width: 14px;
+          align-self: stretch;
           cursor: col-resize;
+          z-index: 6;
+          touch-action: none;
+          border-color: rgba(125, 211, 252, 0.95);
+          background: linear-gradient(180deg, rgba(56, 189, 248, 0.68), rgba(14, 116, 144, 0.55));
+          box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.45), 0 0 14px rgba(34, 211, 238, 0.28);
         }
         .panel-resizer-top::after {
-          width: 3px;
-          height: 58px;
+          width: 6px;
+          height: 160px;
+          background: rgba(186, 230, 253, 0.98);
         }
         .panel-resizer-bottom { display: none; }
-        .dashboard { grid-row: 1; grid-column: 3; }
+        .dashboard {
+          grid-row: 1;
+          grid-column: 3;
+          min-width: 0;
+        }
 
         .dashboard {
           display: grid;
