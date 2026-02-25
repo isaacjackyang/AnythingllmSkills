@@ -254,6 +254,9 @@
       }
 
       .collapsible-block {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
         transition: border-color 0.2s ease;
       }
 
@@ -284,11 +287,30 @@
       }
 
       .collapsible-body {
+        min-height: 0;
+        flex: 1 1 auto;
+        overflow: auto;
+      }
+
+      .collapsible-block[data-collapsed="false"] .collapsible-body {
         margin-top: 0.6rem;
       }
 
       .collapsible-block[data-collapsed="true"] .collapsible-body {
         display: none;
+      }
+
+      .collapsible-block[data-collapsed="true"] {
+        min-height: 0 !important;
+        height: auto !important;
+        overflow: visible;
+        resize: none;
+      }
+
+      .flow-card .collapsible-body,
+      .console .collapsible-body,
+      .console-landscape .collapsible-body {
+        scrollbar-gutter: stable both-edges;
       }
 
       .metric-grid {
