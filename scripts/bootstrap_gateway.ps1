@@ -1,5 +1,6 @@
 param(
   [string]$EnvFile = ".env.gateway",
+  [string]$StartScriptFile = "scripts/start_gateway.ps1",
   [switch]$SkipTooling,
   [switch]$PrintEnv,
   [switch]$Help
@@ -12,9 +13,14 @@ $InstallSummary = [System.Collections.Generic.List[string]]::new()
 $ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDirectory
 $ResolvedEnvFile = $EnvFile
+$ResolvedStartScriptFile = $StartScriptFile
 
 if (-not [System.IO.Path]::IsPathRooted($EnvFile)) {
   $ResolvedEnvFile = Join-Path $ProjectRoot $EnvFile
+}
+
+if (-not [System.IO.Path]::IsPathRooted($StartScriptFile)) {
+  $ResolvedStartScriptFile = Join-Path $ProjectRoot $StartScriptFile
 }
 
 function Add-CheckSummary([string]$Message) {
@@ -51,6 +57,7 @@ Usage:
 
 Options:
   -EnvFile <path>   Output env template file path (default: .env.gateway)
+  -StartScriptFile  Output start script path (default: scripts/start_gateway.ps1)
   -SkipTooling      Skip npm install of typescript/tsx/@types-node
   -PrintEnv         Print env template and exit
   -Help             Show this help
@@ -196,10 +203,62 @@ try {
     Log "Wrote env template: $ResolvedEnvFile"
   }
 
+  if (Test-Path $ResolvedStartScriptFile) {
+    Warn "$ResolvedStartScriptFile already exists; keep existing file."
+    Add-CheckSummary "Start script already exists: $ResolvedStartScriptFile"
+  } else {
+    $startScriptDirectory = Split-Path -Parent $ResolvedStartScriptFile
+    if (-not [string]::IsNullOrWhiteSpace($startScriptDirectory) -and -not (Test-Path $startScriptDirectory)) {
+      New-Item -Path $startScriptDirectory -ItemType Directory -Force | Out-Null
+      Add-InstallSummary "Created start script directory: $startScriptDirectory"
+    }
+
+    @"
+param(
+  [string]$EnvFile = ".env.gateway",
+  [switch]$OpenUi,
+  [string]$UiUrl = "http://localhost:8787/approval-ui"
+)
+
+$ErrorActionPreference = "Stop"
+$ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ProjectRoot = Split-Path -Parent $ScriptDirectory
+$ResolvedEnvFile = $EnvFile
+
+if (-not [System.IO.Path]::IsPathRooted($EnvFile)) {
+  $ResolvedEnvFile = Join-Path $ProjectRoot $EnvFile
+}
+
+if (Test-Path $ResolvedEnvFile) {
+  Get-Content $ResolvedEnvFile | ForEach-Object {
+    if ($_ -match '^\s*(?!#)([^=]+)=(.*)$') {
+      [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process')
+    }
+  }
+  Write-Host "[start_gateway] Loaded env: $ResolvedEnvFile"
+} else {
+  Write-Warning "[start_gateway] Env file not found: $ResolvedEnvFile (continuing with current process env)"
+}
+
+if ($OpenUi) {
+  Start-Process $UiUrl
+  Write-Host "[start_gateway] Opened UI: $UiUrl"
+}
+
+Set-Location $ProjectRoot
+Write-Host "[start_gateway] Starting gateway with: npx tsx gateway/server.ts"
+npx tsx gateway/server.ts
+"@ | Set-Content -Path $ResolvedStartScriptFile -Encoding UTF8
+
+    Add-InstallSummary "Created start script: $ResolvedStartScriptFile"
+    Log "Wrote start script: $ResolvedStartScriptFile"
+  }
+
   Log "Bootstrap completed."
   Log "1) Edit env file: $ResolvedEnvFile"
   Log "2) Load env (PowerShell): Get-Content '$ResolvedEnvFile' | ForEach-Object { if (`$_ -match '^\s*(?!#)([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable(`$matches[1], `$matches[2], 'Process') } }"
-  Log "3) Start gateway: npx tsx gateway/server.ts"
+  Log "3) Start gateway: .\$($StartScriptFile -replace '/', '\\')"
+  Log "4) Start gateway + open UI: .\$($StartScriptFile -replace '/', '\\') -OpenUi"
 }
 finally {
   Show-FinalSummary
