@@ -236,6 +236,44 @@
         padding: 0.75rem;
       }
 
+      .collapsible-block {
+        transition: border-color 0.2s ease;
+      }
+
+      .collapsible-trigger {
+        width: 100%;
+        border: 1px solid rgba(125, 211, 252, 0.35);
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.75);
+        color: #bae6fd;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        padding: 0.4rem 0.6rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .collapsible-chevron {
+        font-size: 0.75rem;
+        color: #67e8f9;
+        transition: transform 0.2s ease;
+      }
+
+      .collapsible-block[data-collapsed="true"] .collapsible-chevron {
+        transform: rotate(-90deg);
+      }
+
+      .collapsible-body {
+        margin-top: 0.6rem;
+      }
+
+      .collapsible-block[data-collapsed="true"] .collapsible-body {
+        display: none;
+      }
+
       .metric-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -446,7 +484,7 @@
   <body>
     <main class="panel">
       <section class="stage-shell" aria-label="左側工作區">
-        <section class="stage" aria-label="照片人物 2D 動作模擬區">
+        <section class="stage" aria-label="照片人物 2D 動作模擬區" data-collapsible data-collapsible-label="助手動畫區">
           <div class="stage-controls">
             <label class="upload-label">上傳照片
               <input id="photoInput" type="file" accept="image/*" />
@@ -457,7 +495,7 @@
           <canvas id="motionCanvas" width="960" height="640" role="img" aria-label="照片人物 2D 骨架動作模擬"></canvas>
         </section>
 
-        <section class="stage-chat" aria-label="指令對話框">
+        <section class="stage-chat" aria-label="指令對話框" data-collapsible data-collapsible-label="Agent 對話輸入框">
           <h2 style="margin:0;font-size:0.92rem;">Agent 對話輸入框</h2>
           <pre id="chatLog" class="chat-log">[chat] 可在此輸入指令，送至 Gateway -> AnythingLLM</pre>
           <form id="chatForm" class="chat-form">
@@ -477,7 +515,7 @@
           <p id="status" class="status" aria-live="polite"></p>
 
           <section class="monitor" aria-label="Agent dashboard">
-            <section id="dashboardPane" class="pane" role="region" aria-label="dashboard">
+            <section id="dashboardPane" class="pane" role="region" aria-label="dashboard" data-collapsible data-collapsible-label="系統指標與控制">
             <div class="metric-grid">
               <article class="metric">
                 <div class="label">助手狀態</div>
@@ -507,25 +545,25 @@
               <button id="clearConsole" class="ctrl-btn" type="button">清除 Console</button>
             </div>
 
-            <article class="flow-card" aria-label="連入接口控制">
+            <article class="flow-card" aria-label="連入接口控制" data-collapsible data-collapsible-label="連入接口卡片與開關">
               <h3>連入接口卡片與開關</h3>
               <p class="flow-help">可獨立啟用/停用每個接口；停用後該接口 ingress 會回傳 503。</p>
               <div class="channel-grid">
-                <section class="channel-card" data-channel-card="telegram">
+                <section class="channel-card" data-channel-card="telegram" data-collapsible data-collapsible-label="通道：Telegram">
                   <div class="channel-head">
                     <span class="channel-name">Telegram</span>
                     <button class="channel-toggle" data-channel-toggle="telegram" type="button">切換</button>
                   </div>
                   <div id="channelStateTelegram" class="channel-state">狀態讀取中...</div>
                 </section>
-                <section class="channel-card" data-channel-card="line">
+                <section class="channel-card" data-channel-card="line" data-collapsible data-collapsible-label="通道：LINE">
                   <div class="channel-head">
                     <span class="channel-name">LINE</span>
                     <button class="channel-toggle" data-channel-toggle="line" type="button">切換</button>
                   </div>
                   <div id="channelStateLine" class="channel-state">狀態讀取中...</div>
                 </section>
-                <section class="channel-card" data-channel-card="web_ui">
+                <section class="channel-card" data-channel-card="web_ui" data-collapsible data-collapsible-label="通道：Web UI">
                   <div class="channel-head">
                     <span class="channel-name">Web UI</span>
                     <button class="channel-toggle" data-channel-toggle="web_ui" type="button">切換</button>
@@ -535,7 +573,7 @@
               </div>
             </article>
 
-            <article class="flow-card" aria-label="API 資料流">
+            <article class="flow-card" aria-label="API 資料流" data-collapsible data-collapsible-label="API 資料流拓樸">
               <h3>API 資料流拓樸（卡片式）</h3>
               <p class="flow-help">以方塊卡片呈現目前元件（UI / Gateway / AnythingLLM / Ollama / gpt-oss:20b），連線旁標示通訊方式（API / Local Runtime）。<span class="flow-hint">可直接拖曳卡片調整拓樸。</span></p>
               <svg id="flowSvg" class="flow-svg" viewBox="0 0 980 300" role="img" aria-label="UI 到 LLM 的實際資料流與通訊方式"></svg>
@@ -552,7 +590,7 @@
 
         <div id="dashboardResizer" class="resizer dashboard-resizer" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="調整右側面板與 Console 高度"></div>
 
-        <section class="console-landscape" aria-label="console">
+        <section class="console-landscape" aria-label="console" data-collapsible data-collapsible-label="Console（橫向版）" data-collapsible-collapsed>
           <h2>Console</h2>
           <pre id="consoleLogLandscape" class="console-log">[system] 等待啟動指令...</pre>
         </section>
@@ -562,7 +600,7 @@
 
       <section class="console" aria-label="console">
         <h2>Console</h2>
-        <section id="consolePane" class="pane" role="region" aria-label="console">
+        <section id="consolePane" class="pane" role="region" aria-label="console" data-collapsible data-collapsible-label="Console 內容" data-collapsible-collapsed>
             <pre id="consoleLog" class="console-log">[system] 等待啟動指令...</pre>
         </section>
       </section>
@@ -601,8 +639,45 @@
       const resizerBottom = document.getElementById('resizerBottom');
       const dashboardResizer = document.getElementById('dashboardResizer');
 
+      const initializeCollapsibleBlocks = () => {
+        const blocks = document.querySelectorAll('[data-collapsible]');
+        blocks.forEach((block, index) => {
+          block.classList.add('collapsible-block');
+          const title = block.dataset.collapsibleLabel || block.getAttribute('aria-label') || `區塊 ${index + 1}`;
+          const defaultCollapsed = block.hasAttribute('data-collapsible-collapsed');
+
+          const body = document.createElement('div');
+          body.className = 'collapsible-body';
+          while (block.firstChild) {
+            body.appendChild(block.firstChild);
+          }
+
+          const trigger = document.createElement('button');
+          trigger.type = 'button';
+          trigger.className = 'collapsible-trigger';
+          trigger.innerHTML = `<span>${title}</span><span class="collapsible-chevron">▾</span>`;
+
+          const setCollapsed = (collapsed) => {
+            block.dataset.collapsed = collapsed ? 'true' : 'false';
+            trigger.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            trigger.setAttribute('aria-label', `${collapsed ? '展開' : '收合'}${title}`);
+          };
+
+          trigger.addEventListener('click', () => {
+            const collapsed = block.dataset.collapsed === 'true';
+            setCollapsed(!collapsed);
+          });
+
+          block.appendChild(trigger);
+          block.appendChild(body);
+          setCollapsed(defaultCollapsed);
+        });
+      };
+
       let runningMotion = true;
       let backgroundImage = null;
+
+      initializeCollapsibleBlocks();
 
       const flowConfig = {
         viewBox: { width: 980, height: 300 },
