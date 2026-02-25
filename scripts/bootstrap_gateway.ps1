@@ -9,6 +9,14 @@ $ErrorActionPreference = "Stop"
 $CheckSummary = [System.Collections.Generic.List[string]]::new()
 $InstallSummary = [System.Collections.Generic.List[string]]::new()
 
+$ScriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ProjectRoot = Split-Path -Parent $ScriptDirectory
+$ResolvedEnvFile = $EnvFile
+
+if (-not [System.IO.Path]::IsPathRooted($EnvFile)) {
+  $ResolvedEnvFile = Join-Path $ProjectRoot $EnvFile
+}
+
 function Add-CheckSummary([string]$Message) {
   $CheckSummary.Add($Message) | Out-Null
 }
@@ -123,6 +131,8 @@ function Wait-ForExit {
 }
 
 try {
+  Set-Location $ProjectRoot
+
   if ($Help) {
     Show-Usage
     return
@@ -177,18 +187,18 @@ try {
     Add-CheckSummary "Skipped tooling installation by request (-SkipTooling)"
   }
 
-  if (Test-Path $EnvFile) {
-    Warn "$EnvFile already exists; keep existing file."
-    Add-CheckSummary "Env file already exists: $EnvFile"
+  if (Test-Path $ResolvedEnvFile) {
+    Warn "$ResolvedEnvFile already exists; keep existing file."
+    Add-CheckSummary "Env file already exists: $ResolvedEnvFile"
   } else {
-    Get-EnvTemplate | Set-Content -Path $EnvFile -Encoding UTF8
-    Add-InstallSummary "Created env template file: $EnvFile"
-    Log "Wrote env template: $EnvFile"
+    Get-EnvTemplate | Set-Content -Path $ResolvedEnvFile -Encoding UTF8
+    Add-InstallSummary "Created env template file: $ResolvedEnvFile"
+    Log "Wrote env template: $ResolvedEnvFile"
   }
 
   Log "Bootstrap completed."
-  Log "1) Edit env file: $EnvFile"
-  Log "2) Load env (PowerShell): Get-Content $EnvFile | ForEach-Object { if (`$_ -match '^\s*(?!#)([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable(`$matches[1], `$matches[2], 'Process') } }"
+  Log "1) Edit env file: $ResolvedEnvFile"
+  Log "2) Load env (PowerShell): Get-Content '$ResolvedEnvFile' | ForEach-Object { if (`$_ -match '^\s*(?!#)([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable(`$matches[1], `$matches[2], 'Process') } }"
   Log "3) Start gateway: npx tsx gateway/server.ts"
 }
 finally {
