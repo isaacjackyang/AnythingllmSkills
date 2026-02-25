@@ -170,7 +170,7 @@ Invoke-RestMethod http://localhost:8787/lifecycle
 - 想跑 Gateway：看 `gateway/README.md`
 - 想做 Approval UI：看 `gateway/web/approval_ui/README.md`
 - 想做 Skill：看 `anythingllm-skills/local-file-search-open/README.md`
-- 想用 MCP Explorer：看 `mcp-open-in-explorer/README.md`
+- 想用 MCP Explorer：看 `mcp-open-in-explorer/README.md`（包含白名單/路徑設定位置說明）
 - 想了解 Brain 掛載：看 `anythingllm/README.md`
 
 ---

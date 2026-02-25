@@ -85,6 +85,53 @@ node dist/index.js C:\agent_sandbox D:\project_data E:\shared_workspace
 
 ---
 
+
+
+## 白名單（allowlist）要去哪裡設定？
+
+你有兩種設定方式，可以同時使用：
+
+1. **啟動參數（最常見）**
+   - 在 `node dist/index.js` 後面直接帶路徑
+   - 例如：`node dist/index.js C:\agent_sandbox D:\project_data`
+
+2. **環境變數 `OPEN_IN_EXPLORER_ALLOW_ROOTS`**
+   - 用分號 `;` 分隔多個根目錄
+   - 例如：
+
+```powershell
+$env:OPEN_IN_EXPLORER_ALLOW_ROOTS = "C:\agent_sandbox;D:\project_data"
+node dist/index.js
+```
+
+若兩者都設定，程式會把兩邊合併成最終白名單。
+
+另外，AnythingLLM 的 MCP 設定檔（例如 `anythingllm_mcp_servers.json`）裡，
+`open-in-explorer.args` 內傳給 `index.js` 的那些路徑，就是你現在實際在用的白名單來源之一。
+
+
+### 在 AnythingLLM 設定檔中，哪一段是白名單？
+
+以本 repo 的 `anythingllm_mcp_servers.json` 為例：
+
+- `open-in-explorer.args[0]`：`index.js` 的路徑（不是白名單）
+- `open-in-explorer.args[1...]`：每一個都是白名單根目錄
+
+也就是說，你要放寬或新增可開啟範圍，就在 `args` 後段加路徑，例如：
+
+```json
+"open-in-explorer": {
+  "command": "node",
+  "args": [
+    "C:\\agent_sandbox\\mcp-open-in-explorer\\dist\\index.js",
+    "C:\\agent_sandbox",
+    "D:\\project_data"
+  ]
+}
+```
+
+如果你不想把白名單寫在 args，也可以改用環境變數 `OPEN_IN_EXPLORER_ALLOW_ROOTS`。
+
 ## 6) 與 AnythingLLM 整合（MCP 設定）
 
 範例：
