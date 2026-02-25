@@ -295,6 +295,7 @@
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 0.55rem;
+        overflow: auto;
       }
 
       .metric {
@@ -302,6 +303,7 @@
         background: rgba(30, 41, 59, 0.8);
         border: 1px solid rgba(148, 163, 184, 0.15);
         padding: 0.55rem 0.65rem;
+        overflow: auto;
       }
 
       .metric .label {
@@ -328,6 +330,7 @@
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 0.55rem;
+        overflow: auto;
       }
 
       .channel-card {
@@ -335,6 +338,21 @@
         border-radius: 12px;
         background: rgba(15, 23, 42, 0.62);
         padding: 0.55rem;
+        overflow: auto;
+      }
+
+      .sortable-item {
+        cursor: grab;
+      }
+
+      .sortable-item.dragging {
+        opacity: 0.45;
+        cursor: grabbing;
+      }
+
+      .sortable-target {
+        outline: 1px dashed rgba(103, 232, 249, 0.9);
+        outline-offset: 2px;
       }
 
       .channel-head {
@@ -561,6 +579,7 @@
               <button id="stopAgent" class="ctrl-btn stop" type="button">停止 Agent</button>
               <button id="clearConsole" class="ctrl-btn" type="button">清除 Console</button>
             </div>
+            </section>
 
             <article class="flow-card" aria-label="連入接口控制" data-collapsible data-collapsible-label="連入接口卡片與開關">
               <h3>連入接口卡片與開關</h3>
@@ -601,7 +620,6 @@
                 <span class="chip">🧠 Local runtime / provider call</span>
               </div>
             </article>
-          </section>
           </section>
         </div>
 
@@ -703,11 +721,65 @@
         });
       };
 
+      const initializeSortableGrid = (containerSelector, itemSelector) => {
+        const container = document.querySelector(containerSelector);
+        if (!(container instanceof HTMLElement)) return;
+
+        let draggingItem = null;
+
+        const items = () => Array.from(container.querySelectorAll(itemSelector)).filter((item) => item instanceof HTMLElement);
+
+        items().forEach((item) => {
+          item.setAttribute('draggable', 'true');
+          item.classList.add('sortable-item');
+        });
+
+        container.addEventListener('dragstart', (event) => {
+          const item = event.target.closest(itemSelector);
+          if (!(item instanceof HTMLElement)) return;
+          draggingItem = item;
+          item.classList.add('dragging');
+          event.dataTransfer.effectAllowed = 'move';
+        });
+
+        container.addEventListener('dragover', (event) => {
+          if (!draggingItem) return;
+          event.preventDefault();
+          const target = event.target.closest(itemSelector);
+          if (!(target instanceof HTMLElement) || target === draggingItem) return;
+          target.classList.add('sortable-target');
+
+          const rect = target.getBoundingClientRect();
+          const insertBefore = event.clientY < rect.top + (rect.height / 2);
+          container.insertBefore(draggingItem, insertBefore ? target : target.nextSibling);
+        });
+
+        container.addEventListener('dragleave', (event) => {
+          const target = event.target.closest(itemSelector);
+          if (!(target instanceof HTMLElement)) return;
+          target.classList.remove('sortable-target');
+        });
+
+        container.addEventListener('drop', (event) => {
+          if (!draggingItem) return;
+          event.preventDefault();
+          container.querySelectorAll('.sortable-target').forEach((node) => node.classList.remove('sortable-target'));
+        });
+
+        container.addEventListener('dragend', () => {
+          if (draggingItem) draggingItem.classList.remove('dragging');
+          container.querySelectorAll('.sortable-target').forEach((node) => node.classList.remove('sortable-target'));
+          draggingItem = null;
+        });
+      };
+
       let runningMotion = true;
       let backgroundImage = null;
 
       initializeResizableBlocks();
       initializeCollapsibleBlocks();
+      initializeSortableGrid('.metric-grid', '.metric');
+      initializeSortableGrid('.channel-grid', '.channel-card');
 
       const flowConfig = {
         viewBox: { width: 980, height: 300 },
