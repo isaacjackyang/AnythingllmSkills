@@ -6,6 +6,16 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$CheckSummary = [System.Collections.Generic.List[string]]::new()
+$InstallSummary = [System.Collections.Generic.List[string]]::new()
+
+function Add-CheckSummary([string]$Message) {
+  $CheckSummary.Add($Message) | Out-Null
+}
+
+function Add-InstallSummary([string]$Message) {
+  $InstallSummary.Add($Message) | Out-Null
+}
 
 function Log([string]$Message) {
   Write-Host "[bootstrap] $Message"
@@ -68,61 +78,120 @@ function Ensure-Command([string]$CommandName) {
   if (-not (Get-Command $CommandName -ErrorAction SilentlyContinue)) {
     Fail "$CommandName not found in PATH. Please install it first."
   }
+
+  Add-CheckSummary "Found required command: $CommandName"
 }
 
-if ($Help) {
-  Show-Usage
-  exit 0
+function Show-FinalSummary {
+  Write-Host ""
+  Write-Host "========== Bootstrap Summary =========="
+
+  if ($CheckSummary.Count -gt 0) {
+    Write-Host "Checks completed:"
+    foreach ($entry in $CheckSummary) {
+      Write-Host "  - $entry"
+    }
+  } else {
+    Write-Host "Checks completed: (none)"
+  }
+
+  if ($InstallSummary.Count -gt 0) {
+    Write-Host "Actions/installs performed:"
+    foreach ($entry in $InstallSummary) {
+      Write-Host "  - $entry"
+    }
+  } else {
+    Write-Host "Actions/installs performed: none"
+  }
+
+  Write-Host "======================================="
 }
 
-if ($PrintEnv) {
-  Get-EnvTemplate | Write-Output
-  exit 0
+function Wait-ForExit {
+  if ($Host.Name -ne "ConsoleHost") {
+    return
+  }
+
+  if ([Console]::IsInputRedirected) {
+    return
+  }
+
+  Write-Host ""
+  Write-Host "Press any key to exit..." -NoNewline
+  $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+  Write-Host ""
 }
 
-Log "Starting first-run environment check..."
+try {
+  if ($Help) {
+    Show-Usage
+    return
+  }
 
-Ensure-Command "node"
-Ensure-Command "npm"
-Ensure-Command "npx"
+  if ($PrintEnv) {
+    Get-EnvTemplate | Write-Output
+    return
+  }
 
-$nodeVersion = (& node -v).Trim()
-$nodeMajorRaw = (& node -p "process.versions.node.split('.')[0]").Trim()
-$nodeMajor = 0
-if (-not [int]::TryParse($nodeMajorRaw, [ref]$nodeMajor)) {
-  Fail "Unable to parse Node.js major version from: $nodeVersion"
+  Log "Starting first-run environment check..."
+
+  Ensure-Command "node"
+  Ensure-Command "npm"
+  Ensure-Command "npx"
+
+  $nodeVersion = (& node -v).Trim()
+  $nodeMajorRaw = (& node -p "process.versions.node.split('.')[0]").Trim()
+  $nodeMajor = 0
+  if (-not [int]::TryParse($nodeMajorRaw, [ref]$nodeMajor)) {
+    Fail "Unable to parse Node.js major version from: $nodeVersion"
+  }
+  if ($nodeMajor -lt 20) {
+    Fail "Node.js version is too old: $nodeVersion. Need >= v20."
+  }
+  Add-CheckSummary "Node.js version check passed: $nodeVersion"
+
+  $npmVersion = (& npm -v).Trim()
+  Add-CheckSummary "npm version check passed: $npmVersion"
+
+  Log "Node.js OK: $nodeVersion"
+  Log "npm OK: $npmVersion"
+  Log "npx OK"
+
+  if (-not (Test-Path "package.json")) {
+    Log "package.json not found; initializing npm project..."
+    Invoke-CheckedCommand "npm" @("init", "-y")
+    Add-InstallSummary "Initialized npm project (npm init -y)"
+  } else {
+    Add-CheckSummary "package.json already exists"
+  }
+
+  if (-not $SkipTooling) {
+    Log "Installing/updating local dev tools: typescript, tsx, @types/node"
+    Invoke-CheckedCommand "npm" @("install", "--save-dev", "typescript", "tsx", "@types/node")
+    Invoke-CheckedCommand "npx" @("tsc", "--version")
+    Invoke-CheckedCommand "npx" @("tsx", "--version")
+    Add-InstallSummary "Installed/updated dev tools: typescript, tsx, @types/node"
+    Log "TypeScript + tsx ready"
+  } else {
+    Warn "Skipping TypeScript tooling install (-SkipTooling)."
+    Add-CheckSummary "Skipped tooling installation by request (-SkipTooling)"
+  }
+
+  if (Test-Path $EnvFile) {
+    Warn "$EnvFile already exists; keep existing file."
+    Add-CheckSummary "Env file already exists: $EnvFile"
+  } else {
+    Get-EnvTemplate | Set-Content -Path $EnvFile -Encoding UTF8
+    Add-InstallSummary "Created env template file: $EnvFile"
+    Log "Wrote env template: $EnvFile"
+  }
+
+  Log "Bootstrap completed."
+  Log "1) Edit env file: $EnvFile"
+  Log "2) Load env (PowerShell): Get-Content $EnvFile | ForEach-Object { if (`$_ -match '^\s*(?!#)([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable(`$matches[1], `$matches[2], 'Process') } }"
+  Log "3) Start gateway: npx tsx gateway/server.ts"
 }
-if ($nodeMajor -lt 20) {
-  Fail "Node.js version is too old: $nodeVersion. Need >= v20."
+finally {
+  Show-FinalSummary
+  Wait-ForExit
 }
-
-Log "Node.js OK: $nodeVersion"
-Log "npm OK: $((& npm -v).Trim())"
-Log "npx OK"
-
-if (-not (Test-Path "package.json")) {
-  Log "package.json not found; initializing npm project..."
-  Invoke-CheckedCommand "npm" @("init", "-y")
-}
-
-if (-not $SkipTooling) {
-  Log "Installing/updating local dev tools: typescript, tsx, @types/node"
-  Invoke-CheckedCommand "npm" @("install", "--save-dev", "typescript", "tsx", "@types/node")
-  Invoke-CheckedCommand "npx" @("tsc", "--version")
-  Invoke-CheckedCommand "npx" @("tsx", "--version")
-  Log "TypeScript + tsx ready"
-} else {
-  Warn "Skipping TypeScript tooling install (-SkipTooling)."
-}
-
-if (Test-Path $EnvFile) {
-  Warn "$EnvFile already exists; keep existing file."
-} else {
-  Get-EnvTemplate | Set-Content -Path $EnvFile -Encoding UTF8
-  Log "Wrote env template: $EnvFile"
-}
-
-Log "Bootstrap completed."
-Log "1) Edit env file: $EnvFile"
-Log "2) Load env (PowerShell): Get-Content $EnvFile | ForEach-Object { if (`$_ -match '^\s*(?!#)([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable(`$matches[1], `$matches[2], 'Process') } }"
-Log "3) Start gateway: npx tsx gateway/server.ts"
