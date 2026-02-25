@@ -11,6 +11,13 @@ function Log([string]$Message) {
   Write-Host "[bootstrap] $Message"
 }
 
+function Invoke-CheckedCommand([string]$Command, [string[]]$Arguments) {
+  & $Command @Arguments
+  if ($LASTEXITCODE -ne 0) {
+    Fail "Command failed (exit $LASTEXITCODE): $Command $($Arguments -join ' ')"
+  }
+}
+
 function Warn([string]$Message) {
   Write-Warning "[bootstrap] $Message"
 }
@@ -79,26 +86,30 @@ Ensure-Command "node"
 Ensure-Command "npm"
 Ensure-Command "npx"
 
-$nodeVersion = & node -v
-$nodeMajor = [int]((& node -p "process.versions.node.split('.')[0]").Trim())
+$nodeVersion = (& node -v).Trim()
+$nodeMajorRaw = (& node -p "process.versions.node.split('.')[0]").Trim()
+$nodeMajor = 0
+if (-not [int]::TryParse($nodeMajorRaw, [ref]$nodeMajor)) {
+  Fail "Unable to parse Node.js major version from: $nodeVersion"
+}
 if ($nodeMajor -lt 20) {
   Fail "Node.js version is too old: $nodeVersion. Need >= v20."
 }
 
 Log "Node.js OK: $nodeVersion"
-Log "npm OK: $(& npm -v)"
+Log "npm OK: $((& npm -v).Trim())"
 Log "npx OK"
 
 if (-not (Test-Path "package.json")) {
   Log "package.json not found; initializing npm project..."
-  & npm init -y | Out-Null
+  Invoke-CheckedCommand "npm" @("init", "-y")
 }
 
 if (-not $SkipTooling) {
   Log "Installing/updating local dev tools: typescript, tsx, @types/node"
-  & npm install --save-dev typescript tsx @types/node
-  & npx tsc --version | Out-Null
-  & npx tsx --version | Out-Null
+  Invoke-CheckedCommand "npm" @("install", "--save-dev", "typescript", "tsx", "@types/node")
+  Invoke-CheckedCommand "npx" @("tsc", "--version")
+  Invoke-CheckedCommand "npx" @("tsx", "--version")
   Log "TypeScript + tsx ready"
 } else {
   Warn "Skipping TypeScript tooling install (-SkipTooling)."
@@ -113,5 +124,5 @@ if (Test-Path $EnvFile) {
 
 Log "Bootstrap completed."
 Log "1) Edit env file: $EnvFile"
-Log "2) Load env (PowerShell): Get-Content $EnvFile | ForEach-Object { if (`$_ -match '^(?!#)([^=]+)=(.*)$') { Set-Item -Path Env:$(`$matches[1]) -Value `$matches[2] } }"
+Log "2) Load env (PowerShell): Get-Content $EnvFile | ForEach-Object { if (`$_ -match '^\s*(?!#)([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable(`$matches[1], `$matches[2], 'Process') } }"
 Log "3) Start gateway: npx tsx gateway/server.ts"
