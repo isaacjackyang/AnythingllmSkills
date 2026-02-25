@@ -12,6 +12,13 @@
         --text: #e2e8f0;
         --primary: #38bdf8;
         --accent: #f472b6;
+        --panel-r1: 60fr;
+        --panel-r2: 20fr;
+        --panel-r3: 20fr;
+        --panel-c1: 1fr;
+        --panel-c2: 1fr;
+        --dash-r1: 60fr;
+        --dash-r2: 40fr;
       }
 
       * { box-sizing: border-box; }
@@ -33,9 +40,38 @@
         border: 1px solid rgba(148, 163, 184, 0.2);
         backdrop-filter: blur(10px);
         display: grid;
-        grid-template-rows: 60fr 20fr 20fr;
-        gap: 1rem;
+        grid-template-rows: minmax(180px, var(--panel-r1)) 10px minmax(140px, var(--panel-r2)) 10px minmax(120px, var(--panel-r3));
+        gap: 0.6rem;
       }
+
+
+      .resizer {
+        border-radius: 999px;
+        background: rgba(56, 189, 248, 0.32);
+        border: 1px solid rgba(125, 211, 252, 0.55);
+        cursor: row-resize;
+        position: relative;
+      }
+
+      .resizer::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 58px;
+        height: 3px;
+        border-radius: 999px;
+        background: rgba(186, 230, 253, 0.95);
+      }
+
+      .resizer:focus-visible {
+        outline: 2px solid #22d3ee;
+        outline-offset: 2px;
+      }
+
+      .panel-resizer-top { grid-row: 2; }
+      .panel-resizer-bottom { grid-row: 4; }
 
       .dashboard h1 {
         margin: 0;
@@ -257,17 +293,33 @@
 
       @media (orientation: landscape) {
         .panel {
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: minmax(320px, var(--panel-c1)) 10px minmax(320px, var(--panel-c2));
           grid-template-rows: 1fr;
+          gap: 0.6rem;
         }
 
         .stage { grid-row: 1; grid-column: 1; }
-        .dashboard { grid-row: 1; grid-column: 2; }
+        .panel-resizer-top {
+          grid-row: 1;
+          grid-column: 2;
+          cursor: col-resize;
+        }
+        .panel-resizer-top::after {
+          width: 3px;
+          height: 58px;
+        }
+        .panel-resizer-bottom { display: none; }
+        .dashboard { grid-row: 1; grid-column: 3; }
 
         .dashboard {
           display: grid;
-          grid-template-rows: 60fr 40fr;
-          gap: 0.8rem;
+          grid-template-rows: minmax(180px, var(--dash-r1)) 10px minmax(140px, var(--dash-r2));
+          gap: 0.6rem;
+        }
+
+        .dashboard-resizer {
+          grid-row: 2;
+          cursor: row-resize;
         }
 
         .dashboard-main,
@@ -286,6 +338,7 @@
       @media (orientation: portrait) {
         .dashboard-main { display: block; }
         .console-landscape { display: none; }
+        .dashboard-resizer { display: none; }
       }
     </style>
   </head>
@@ -301,6 +354,8 @@
         </div>
         <canvas id="motionCanvas" width="960" height="640" role="img" aria-label="照片人物 2D 骨架動作模擬"></canvas>
       </section>
+
+      <div id="resizerTop" class="resizer panel-resizer-top" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="調整上方與中間區塊高度"></div>
 
       <section class="dashboard">
         <div class="dashboard-main">
@@ -351,11 +406,15 @@
           </section>
         </div>
 
+        <div id="dashboardResizer" class="resizer dashboard-resizer" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="調整右側面板與 Console 高度"></div>
+
         <section class="console-landscape" aria-label="console">
           <h2>Console</h2>
           <pre id="consoleLogLandscape" class="console-log">[system] 等待啟動指令...</pre>
         </section>
       </section>
+
+      <div id="resizerBottom" class="resizer panel-resizer-bottom" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="調整中間與下方區塊高度"></div>
 
       <section class="console" aria-label="console">
         <h2>Console</h2>
@@ -384,6 +443,11 @@
       const pauseAndClearStageBtn = document.getElementById('pauseAndClearStage');
       const motionCanvas = document.getElementById('motionCanvas');
       const motionCtx = motionCanvas.getContext('2d');
+      const panelEl = document.querySelector('.panel');
+      const dashboardEl = document.querySelector('.dashboard');
+      const resizerTop = document.getElementById('resizerTop');
+      const resizerBottom = document.getElementById('resizerBottom');
+      const dashboardResizer = document.getElementById('dashboardResizer');
 
       let runningMotion = true;
       let backgroundImage = null;
@@ -689,6 +753,125 @@
           targetLog.textContent = '[system] console 已清空';
         });
         lastUpdated.textContent = toLocalTime(new Date().toISOString());
+      });
+
+
+      const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
+
+      const setupResizer = ({ handle, onStart, onMove, onEnd, cursor }) => {
+        if (!handle) return;
+
+        handle.addEventListener('mousedown', (event) => {
+          event.preventDefault();
+          const startState = onStart(event);
+          if (!startState) return;
+          document.body.style.cursor = cursor;
+          document.body.style.userSelect = 'none';
+
+          const onMouseMove = (moveEvent) => onMove(moveEvent, startState);
+          const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            if (onEnd) onEnd();
+          };
+
+          document.addEventListener('mousemove', onMouseMove);
+          document.addEventListener('mouseup', onMouseUp);
+        });
+      };
+
+      setupResizer({
+        handle: resizerTop,
+        cursor: 'row-resize',
+        onStart: () => {
+          const rect = panelEl.getBoundingClientRect();
+          const styles = getComputedStyle(document.documentElement);
+          return {
+            panelTop: rect.top,
+            panelHeight: rect.height,
+            currentR2: parseFloat(styles.getPropertyValue('--panel-r2')) || 20,
+            currentR3: parseFloat(styles.getPropertyValue('--panel-r3')) || 20,
+          };
+        },
+        onMove: (event, state) => {
+          if (window.matchMedia('(orientation: landscape)').matches) {
+            const rect = panelEl.getBoundingClientRect();
+            const minLeft = 320;
+            const minRight = 320;
+            const leftPx = clamp(event.clientX - rect.left, minLeft, rect.width - minRight);
+            const leftPct = (leftPx / rect.width) * 100;
+            document.documentElement.style.setProperty('--panel-c1', `${leftPct}fr`);
+            document.documentElement.style.setProperty('--panel-c2', `${100 - leftPct}fr`);
+            return;
+          }
+
+          const minTop = 180;
+          const minMid = 140;
+          const minBottom = 120;
+          const y = event.clientY - state.panelTop;
+          const maxTop = state.panelHeight - (minMid + minBottom);
+          const topPx = clamp(y, minTop, maxTop);
+          const remain = state.panelHeight - topPx;
+          const midRatio = state.currentR2 / (state.currentR2 + state.currentR3);
+          const midPx = clamp(remain * midRatio, minMid, remain - minBottom);
+          const bottomPx = remain - midPx;
+
+          document.documentElement.style.setProperty('--panel-r1', `${topPx}fr`);
+          document.documentElement.style.setProperty('--panel-r2', `${midPx}fr`);
+          document.documentElement.style.setProperty('--panel-r3', `${bottomPx}fr`);
+        },
+      });
+
+      setupResizer({
+        handle: resizerBottom,
+        cursor: 'row-resize',
+        onStart: () => {
+          const rect = panelEl.getBoundingClientRect();
+          const styles = getComputedStyle(document.documentElement);
+          return {
+            panelTop: rect.top,
+            panelHeight: rect.height,
+            currentR1: parseFloat(styles.getPropertyValue('--panel-r1')) || 60,
+            currentR2: parseFloat(styles.getPropertyValue('--panel-r2')) || 20,
+            currentR3: parseFloat(styles.getPropertyValue('--panel-r3')) || 20,
+          };
+        },
+        onMove: (event, state) => {
+          if (window.matchMedia('(orientation: landscape)').matches) return;
+
+          const minTop = 180;
+          const minMid = 140;
+          const minBottom = 120;
+          const y = event.clientY - state.panelTop;
+          const total = state.currentR1 + state.currentR2 + state.currentR3;
+          const topPx = clamp((state.panelHeight * (state.currentR1 / total)), minTop, state.panelHeight - (minMid + minBottom));
+          const maxY = state.panelHeight - minBottom;
+          const boundaryPx = clamp(y, topPx + minMid, maxY);
+          const midPx = boundaryPx - topPx;
+          const bottomPx = state.panelHeight - boundaryPx;
+
+          document.documentElement.style.setProperty('--panel-r2', `${midPx}fr`);
+          document.documentElement.style.setProperty('--panel-r3', `${bottomPx}fr`);
+        },
+      });
+
+      setupResizer({
+        handle: dashboardResizer,
+        cursor: 'row-resize',
+        onStart: () => {
+          const rect = dashboardEl.getBoundingClientRect();
+          return { dashboardTop: rect.top, dashboardHeight: rect.height };
+        },
+        onMove: (event, state) => {
+          if (!window.matchMedia('(orientation: landscape)').matches) return;
+          const minMain = 180;
+          const minConsole = 140;
+          const y = clamp(event.clientY - state.dashboardTop, minMain, state.dashboardHeight - minConsole);
+          document.documentElement.style.setProperty('--dash-r1', `${y}fr`);
+          document.documentElement.style.setProperty('--dash-r2', `${state.dashboardHeight - y}fr`);
+        },
       });
 
       refreshState()
