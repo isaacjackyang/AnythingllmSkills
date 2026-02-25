@@ -267,6 +267,11 @@
         color: #94a3b8;
       }
 
+      .flow-hint {
+        margin-left: 0.4rem;
+        color: #67e8f9;
+      }
+
       .flow-svg {
         width: 100%;
         height: 260px;
@@ -380,6 +385,10 @@
                 <div id="taskProgress" class="value">0%</div>
               </article>
               <article class="metric">
+                <div class="label">目前任務執行時間</div>
+                <div id="taskElapsed" class="value">00:00:00</div>
+              </article>
+              <article class="metric">
                 <div class="label">最後更新</div>
                 <div id="lastUpdated" class="value">--:--:--</div>
               </article>
@@ -393,7 +402,7 @@
 
             <article class="flow-card" aria-label="API 資料流">
               <h3>API 資料流拓樸（卡片式）</h3>
-              <p class="flow-help">以方塊卡片呈現目前元件（UI / Gateway / AnythingLLM / Ollama / gpt-oss:20b），連線旁標示通訊方式（API / Local Runtime）。</p>
+              <p class="flow-help">以方塊卡片呈現目前元件（UI / Gateway / AnythingLLM / Ollama / gpt-oss:20b），連線旁標示通訊方式（API / Local Runtime）。<span class="flow-hint">可直接拖曳卡片調整拓樸。</span></p>
               <svg id="flowSvg" class="flow-svg" viewBox="0 0 980 300" role="img" aria-label="UI 到 LLM 的實際資料流與通訊方式"></svg>
               <div class="flow-legend">
                 <span class="chip">🟢 Active path</span>
@@ -430,6 +439,7 @@
       const assistantStatus = document.getElementById('assistantStatus');
       const executionStatus = document.getElementById('executionStatus');
       const taskProgress = document.getElementById('taskProgress');
+      const taskElapsed = document.getElementById('taskElapsed');
       const lastUpdated = document.getElementById('lastUpdated');
       const consoleLog = document.getElementById('consoleLog');
       const consoleLogLandscape = document.getElementById('consoleLogLandscape');
@@ -453,6 +463,7 @@
       let backgroundImage = null;
 
       const flowConfig = {
+        viewBox: { width: 980, height: 300 },
         nodes: [
           { id: 'ui', title: 'Dashboard UI', subtitle: 'approval_ui/index.html', x: 30, y: 105, w: 180, h: 78, kind: 'control' },
           { id: 'gateway', title: 'Gateway', subtitle: '/api/agent/control', x: 250, y: 105, w: 180, h: 78, kind: 'core' },
@@ -467,6 +478,10 @@
           { from: 'ollama', to: 'gptoss', label: 'Local model runtime' },
         ],
       };
+
+      const flowNodes = flowConfig.nodes.map((node) => ({ ...node }));
+      let flowLastControlState = null;
+      let flowDragState = null;
 
       const basePose = {
         head: { x: 460, y: 160 },
@@ -600,10 +615,125 @@
         });
       };
 
+      const pad2 = (value) => String(value).padStart(2, '0');
+      const formatDuration = (totalMs) => {
+        const totalSeconds = Math.max(0, Math.floor(totalMs / 1000));
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`;
+      };
+
+      let taskElapsedMs = 0;
+      let taskRunStartedAtMs = null;
+      let taskTimerId = null;
+      let currentRunState = 'idle';
+
+      const renderTaskElapsed = () => {
+        if (!taskElapsed) return;
+        const runningDelta = taskRunStartedAtMs ? (Date.now() - taskRunStartedAtMs) : 0;
+        taskElapsed.textContent = formatDuration(taskElapsedMs + runningDelta);
+      };
+
+      const ensureTaskTimer = () => {
+        if (taskTimerId) return;
+        taskTimerId = window.setInterval(renderTaskElapsed, 1000);
+      };
+
+      const clearTaskTimer = () => {
+        if (!taskTimerId) return;
+        window.clearInterval(taskTimerId);
+        taskTimerId = null;
+      };
+
+      const reconcileTaskElapsed = (nextState) => {
+        if (nextState === 'idle' || nextState === 'stopped') {
+          taskElapsedMs = 0;
+          taskRunStartedAtMs = null;
+          clearTaskTimer();
+          renderTaskElapsed();
+          currentRunState = nextState;
+          return;
+        }
+
+        if (nextState === 'running') {
+          if (currentRunState !== 'running') {
+            taskRunStartedAtMs = Date.now();
+          }
+          ensureTaskTimer();
+          renderTaskElapsed();
+          currentRunState = nextState;
+          return;
+        }
+
+        if (nextState === 'paused') {
+          if (taskRunStartedAtMs) {
+            taskElapsedMs += Date.now() - taskRunStartedAtMs;
+            taskRunStartedAtMs = null;
+          }
+          clearTaskTimer();
+          renderTaskElapsed();
+          currentRunState = nextState;
+        }
+      };
+
+      const clientToFlowPoint = (clientX, clientY) => {
+        const rect = flowSvg.getBoundingClientRect();
+        const scaleX = flowConfig.viewBox.width / rect.width;
+        const scaleY = flowConfig.viewBox.height / rect.height;
+        return {
+          x: (clientX - rect.left) * scaleX,
+          y: (clientY - rect.top) * scaleY,
+        };
+      };
+
+      const startFlowDrag = (event) => {
+        if (event.button !== 0 || !flowSvg) return;
+        const nodeGroup = event.target.closest('[data-node-id]');
+        if (!nodeGroup) return;
+
+        const nodeId = nodeGroup.dataset.nodeId;
+        const node = flowNodes.find((item) => item.id === nodeId);
+        if (!node) return;
+
+        const pointer = clientToFlowPoint(event.clientX, event.clientY);
+        flowDragState = {
+          node,
+          pointerId: event.pointerId,
+          offsetX: pointer.x - node.x,
+          offsetY: pointer.y - node.y,
+        };
+
+        flowSvg.setPointerCapture(event.pointerId);
+      };
+
+      const moveFlowDrag = (event) => {
+        if (!flowDragState || flowDragState.pointerId !== event.pointerId) return;
+
+        const pointer = clientToFlowPoint(event.clientX, event.clientY);
+        const { node, offsetX, offsetY } = flowDragState;
+        node.x = clamp(pointer.x - offsetX, 10, flowConfig.viewBox.width - node.w - 10);
+        node.y = clamp(pointer.y - offsetY, 10, flowConfig.viewBox.height - node.h - 10);
+
+        renderFlow(flowLastControlState);
+      };
+
+      const endFlowDrag = (event) => {
+        if (!flowDragState || flowDragState.pointerId !== event.pointerId) return;
+        flowSvg.releasePointerCapture(event.pointerId);
+        flowDragState = null;
+      };
+
+      flowSvg?.addEventListener('pointerdown', startFlowDrag);
+      flowSvg?.addEventListener('pointermove', moveFlowDrag);
+      flowSvg?.addEventListener('pointerup', endFlowDrag);
+      flowSvg?.addEventListener('pointercancel', endFlowDrag);
+
       const renderFlow = (controlState) => {
         if (!flowSvg) return;
+        flowLastControlState = controlState;
 
-        const nodeMap = new Map(flowConfig.nodes.map((node) => [node.id, node]));
+        const nodeMap = new Map(flowNodes.map((node) => [node.id, node]));
         const isActive = controlState?.assistant_status === 'Running';
         const isPaused = controlState?.assistant_status === 'Paused';
 
@@ -631,7 +761,7 @@
           `;
         }).join('');
 
-        const nodeMarkup = flowConfig.nodes.map((node) => {
+        const nodeMarkup = flowNodes.map((node) => {
           const fillByKind = {
             integration: '#0f172a',
             core: '#0b253a',
@@ -646,7 +776,7 @@
           const titleY = node.y + 28;
 
           return `
-            <g>
+            <g data-node-id="${node.id}" style="cursor: grab;">
               <rect x="${node.x}" y="${node.y}" width="${node.w}" height="${node.h}" rx="12" fill="${fillByKind[node.kind] || '#0f172a'}" stroke="${stroke}" stroke-width="2.5" />
               <text x="${titleX}" y="${titleY}" fill="#e2e8f0" font-size="14" font-weight="700">${node.title}</text>
               <text x="${titleX}" y="${titleY + 20}" fill="#94a3b8" font-size="11">${node.subtitle}</text>
@@ -668,6 +798,7 @@
       };
 
       const applyControlState = (data) => {
+        reconcileTaskElapsed(data.state);
         assistantStatus.textContent = data.assistant_status;
         executionStatus.textContent = data.execution_status;
         taskProgress.textContent = `${data.task_progress}%`;
