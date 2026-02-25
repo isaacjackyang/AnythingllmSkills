@@ -3,6 +3,7 @@ import type { Event } from "../../core/event";
 
 export interface TelegramConnectorConfig {
   botToken: string;
+  webhookSecretToken?: string;
   defaultWorkspace: string;
   defaultAgent: string;
 }
@@ -29,13 +30,25 @@ interface TelegramUpdate {
 
 export class TelegramConnector {
   private readonly botToken: string;
+  private readonly webhookSecretToken?: string;
   private readonly defaultWorkspace: string;
   private readonly defaultAgent: string;
 
   constructor(config: TelegramConnectorConfig) {
     this.botToken = config.botToken;
+    this.webhookSecretToken = config.webhookSecretToken;
     this.defaultWorkspace = config.defaultWorkspace;
     this.defaultAgent = config.defaultAgent;
+  }
+
+  verifyWebhookSecretToken(secretToken?: string): boolean {
+    if (!this.webhookSecretToken) return true;
+    if (!secretToken) return false;
+
+    const expected = Buffer.from(this.webhookSecretToken);
+    const actual = Buffer.from(secretToken);
+    if (expected.length !== actual.length) return false;
+    return crypto.timingSafeEqual(expected, actual);
   }
 
   toEvent(input: unknown): Event {
