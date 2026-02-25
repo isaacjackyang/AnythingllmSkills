@@ -19,6 +19,8 @@
         --panel-c2: 1fr;
         --dash-r1: 60fr;
         --dash-r2: 40fr;
+        --stage-r1: 74fr;
+        --stage-r2: 26fr;
       }
 
       * { box-sizing: border-box; }
@@ -114,8 +116,13 @@
 
       .stage-shell {
         display: grid;
-        grid-template-rows: minmax(180px, 1fr) minmax(140px, 0.36fr);
+        grid-template-rows: minmax(180px, var(--stage-r1)) 10px minmax(140px, var(--stage-r2));
         gap: 0.6rem;
+      }
+
+      .stage-shell-resizer {
+        grid-row: 2;
+        cursor: row-resize;
       }
 
       .stage-chat {
@@ -586,6 +593,8 @@
           <canvas id="motionCanvas" width="960" height="640" role="img" aria-label="照片人物 2D 骨架動作模擬"></canvas>
         </section>
 
+        <div id="stageResizer" class="resizer stage-shell-resizer" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="調整助手動畫區與 Agent 對話輸入框高度"></div>
+
         <section class="stage-chat" aria-label="指令對話框" data-collapsible data-collapsible-label="Agent 對話輸入框">
           <h2 style="margin:0;font-size:0.92rem;">Agent 對話輸入框</h2>
           <pre id="chatLog" class="chat-log">[chat] 可在此輸入指令，送至 Gateway -> AnythingLLM</pre>
@@ -726,9 +735,11 @@
       const motionCtx = motionCanvas.getContext('2d');
       const panelEl = document.querySelector('.panel');
       const dashboardEl = document.querySelector('.dashboard');
+      const stageShellEl = document.querySelector('.stage-shell');
       const resizerTop = document.getElementById('resizerTop');
       const resizerBottom = document.getElementById('resizerBottom');
       const dashboardResizer = document.getElementById('dashboardResizer');
+      const stageResizer = document.getElementById('stageResizer');
 
 
       const initializeResizableBlocks = () => {
@@ -1494,6 +1505,23 @@
 
           document.documentElement.style.setProperty('--panel-r2', `${midPx}fr`);
           document.documentElement.style.setProperty('--panel-r3', `${bottomPx}fr`);
+        },
+      });
+
+      setupResizer({
+        handle: stageResizer,
+        cursor: 'row-resize',
+        onStart: () => {
+          const rect = stageShellEl?.getBoundingClientRect();
+          if (!rect) return null;
+          return { stageTop: rect.top, stageHeight: rect.height };
+        },
+        onMove: (event, state) => {
+          const minStage = 180;
+          const minChat = 140;
+          const topPx = clamp(event.clientY - state.stageTop, minStage, state.stageHeight - minChat);
+          document.documentElement.style.setProperty('--stage-r1', `${topPx}fr`);
+          document.documentElement.style.setProperty('--stage-r2', `${state.stageHeight - topPx}fr`);
         },
       });
 
