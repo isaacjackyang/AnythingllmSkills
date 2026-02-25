@@ -236,6 +236,23 @@
         padding: 0.75rem;
       }
 
+      .resizable-block {
+        resize: both;
+        overflow: auto;
+        min-width: 220px;
+        min-height: 120px;
+        max-width: 100%;
+      }
+
+      .resizable-block.compact {
+        min-width: 150px;
+        min-height: 72px;
+      }
+
+      .resizable-block::-webkit-resizer {
+        background: linear-gradient(135deg, transparent 0 45%, rgba(103, 232, 249, 0.85) 45% 55%, transparent 55% 100%);
+      }
+
       .collapsible-block {
         transition: border-color 0.2s ease;
       }
@@ -639,6 +656,18 @@
       const resizerBottom = document.getElementById('resizerBottom');
       const dashboardResizer = document.getElementById('dashboardResizer');
 
+
+      const initializeResizableBlocks = () => {
+        document.querySelectorAll('.stage, .stage-chat, .pane, .flow-card, .channel-card, .metric, .console, .console-landscape')
+          .forEach((block) => {
+            if (!(block instanceof HTMLElement)) return;
+            block.classList.add('resizable-block');
+            if (block.classList.contains('channel-card') || block.classList.contains('metric')) {
+              block.classList.add('compact');
+            }
+          });
+      };
+
       const initializeCollapsibleBlocks = () => {
         const blocks = document.querySelectorAll('[data-collapsible]');
         blocks.forEach((block, index) => {
@@ -677,6 +706,7 @@
       let runningMotion = true;
       let backgroundImage = null;
 
+      initializeResizableBlocks();
       initializeCollapsibleBlocks();
 
       const flowConfig = {
@@ -825,17 +855,27 @@
         return new Date(iso).toLocaleTimeString('zh-Hant-TW', { hour12: false });
       };
 
+      const scrollToBottom = (element) => {
+        if (!(element instanceof HTMLElement)) return;
+        element.scrollTop = element.scrollHeight;
+      };
+
       const scrollConsoleToLatest = () => {
         [consoleLog, consoleLogLandscape].forEach((targetLog) => {
-          if (!targetLog) return;
-          targetLog.scrollTop = targetLog.scrollHeight;
+          if (!(targetLog instanceof HTMLElement)) return;
+          scrollToBottom(targetLog);
+          // 真正可滾動的容器有時是包住 <pre> 的父層（例如收合容器）。
+          scrollToBottom(targetLog.parentElement);
+          scrollToBottom(targetLog.closest('.collapsible-body'));
         });
 
         // 區塊被收合後再展開時，需等待排版完成才可正確捲動到底。
         window.requestAnimationFrame(() => {
           [consoleLog, consoleLogLandscape].forEach((targetLog) => {
-            if (!targetLog) return;
-            targetLog.scrollTop = targetLog.scrollHeight;
+            if (!(targetLog instanceof HTMLElement)) return;
+            scrollToBottom(targetLog);
+            scrollToBottom(targetLog.parentElement);
+            scrollToBottom(targetLog.closest('.collapsible-body'));
           });
         });
       };
