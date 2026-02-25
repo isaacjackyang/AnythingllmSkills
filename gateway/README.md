@@ -49,7 +49,13 @@ npx -v
 在 repo 根目錄執行：
 
 ```powershell
-npx tsx gateway/server.ts
+.\scripts\start_gateway.ps1
+```
+
+如果想啟動後直接打開 Approval UI：
+
+```powershell
+.\scripts\start_gateway.ps1 -OpenUi
 ```
 
 如果成功，預設監聽：`http://localhost:8787`

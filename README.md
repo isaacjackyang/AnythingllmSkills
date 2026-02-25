@@ -87,7 +87,13 @@ npx -v
 ## 5. 啟動 Gateway（最小路徑）
 
 ```powershell
-npx tsx gateway/server.ts
+.\scripts\start_gateway.ps1
+```
+
+如果想啟動後直接打開 Approval UI：
+
+```powershell
+.\scripts\start_gateway.ps1 -OpenUi
 ```
 
 啟動後，先做健康檢查：
