@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2D 照片人物動作模擬（Canvas）</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 20px; }
+      .wrap { display: grid; gap: 12px; max-width: 900px; }
+      canvas { border: 1px solid #ccc; border-radius: 8px; }
+      .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+      .tip { color: #555; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>2D 照片人物動作模擬（先做簡版）</h1>
+      <div class="controls">
+        <label>上傳人物照片：<input id="photoInput" type="file" accept="image/*" /></label>
+        <button id="toggleBtn">暫停</button>
+      </div>
+      <p class="tip">這個範例會把照片當背景，並在上面疊 2D 骨架做「揮手」動作。若要更像真人，後續再接姿態估計（MediaPipe/MoveNet）。</p>
+      <canvas id="stage" width="800" height="500"></canvas>
+    </div>
+
+    <script type="module">
+      const canvas = document.getElementById('stage');
+      const ctx = canvas.getContext('2d');
+      const photoInput = document.getElementById('photoInput');
+      const toggleBtn = document.getElementById('toggleBtn');
+
+      let running = true;
+      let bgImage = null;
+
+      const base = {
+        head: { x: 380, y: 120 },
+        neck: { x: 380, y: 170 },
+        shoulderL: { x: 340, y: 185 },
+        shoulderR: { x: 420, y: 185 },
+        elbowL: { x: 310, y: 230 },
+        elbowR: { x: 460, y: 230 },
+        handL: { x: 290, y: 280 },
+        handR: { x: 500, y: 280 },
+        hip: { x: 380, y: 280 },
+        kneeL: { x: 350, y: 360 },
+        kneeR: { x: 410, y: 360 },
+        footL: { x: 330, y: 450 },
+        footR: { x: 430, y: 450 }
+      };
+
+      function loadImage(file) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = URL.createObjectURL(file);
+        });
+      }
+
+      photoInput.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        bgImage = await loadImage(file);
+      });
+
+      toggleBtn.addEventListener('click', () => {
+        running = !running;
+        toggleBtn.textContent = running ? '暫停' : '繼續';
+      });
+
+      function drawJoint(p, color = '#1f2937') {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
+
+      function line(a, b, w = 4, color = '#2563eb') {
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.lineWidth = w;
+        ctx.strokeStyle = color;
+        ctx.stroke();
+      }
+
+      function drawSkeleton(p) {
+        line(p.head, p.neck, 3);
+        line(p.neck, p.shoulderL);
+        line(p.neck, p.shoulderR);
+        line(p.shoulderL, p.elbowL);
+        line(p.elbowL, p.handL);
+        line(p.shoulderR, p.elbowR);
+        line(p.elbowR, p.handR);
+        line(p.neck, p.hip, 5);
+        line(p.hip, p.kneeL);
+        line(p.kneeL, p.footL);
+        line(p.hip, p.kneeR);
+        line(p.kneeR, p.footR);
+
+        Object.values(p).forEach((joint) => drawJoint(joint));
+      }
+
+      function frame(t) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (bgImage) {
+          const scale = Math.min(canvas.width / bgImage.width, canvas.height / bgImage.height);
+          const w = bgImage.width * scale;
+          const h = bgImage.height * scale;
+          const x = (canvas.width - w) / 2;
+          const y = (canvas.height - h) / 2;
+          ctx.drawImage(bgImage, x, y, w, h);
+        } else {
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        const phase = t * 0.004;
+        const rightHandLift = Math.sin(phase) * 80;
+        const rightElbowLift = Math.sin(phase) * 50;
+
+        const pose = structuredClone(base);
+        pose.handR.y = base.handR.y - rightHandLift;
+        pose.handR.x = base.handR.x + Math.sin(phase) * 20;
+        pose.elbowR.y = base.elbowR.y - rightElbowLift;
+
+        drawSkeleton(pose);
+
+        if (running) requestAnimationFrame(frame);
+      }
+
+      requestAnimationFrame(frame);
+    </script>
+  </body>
+</html>

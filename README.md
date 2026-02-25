@@ -293,3 +293,22 @@ Connector 會解析前綴後，把剩餘文字作為真正 query。
 - 補 Discord/Slack/LINE connectors（含 identity mapping）
 - 加入 metrics + tracing（成功率、延遲、失敗分類）
 
+
+## 2D 照片人物動作模擬範例
+
+若你目前只需要「2D 模擬」，可直接打開：
+
+- `examples/photo-2d-motion.html`
+
+這個範例提供：
+
+- 上傳照片做背景
+- 疊加 2D 骨架
+- 內建揮手動畫（右手）
+
+快速啟動（任一靜態伺服器）：
+
+```bash
+python3 -m http.server 8080
+# 然後開啟 http://localhost:8080/examples/photo-2d-motion.html
+```
