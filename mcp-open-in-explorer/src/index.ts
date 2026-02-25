@@ -5,15 +5,32 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 function normalizeWindowsPath(inputPath: string): string {
-  return path.resolve(inputPath);
+  return path.win32.normalize(path.resolve(inputPath));
+}
+
+function trimTrailingSeparators(inputPath: string): string {
+  const parsed = path.win32.parse(inputPath);
+  if (inputPath === parsed.root) {
+    return inputPath;
+  }
+
+  return inputPath.replace(/[\\/]+$/, "");
+}
+
+function toComparablePath(inputPath: string): string {
+  return trimTrailingSeparators(normalizeWindowsPath(inputPath)).toLowerCase();
 }
 
 function assertWithinRoots(targetPath: string, allowRoots: string[]): string {
   const resolvedTarget = normalizeWindowsPath(targetPath);
+  const comparableTarget = toComparablePath(targetPath);
 
   const allowed = allowRoots.some((root) => {
-    const resolvedRoot = normalizeWindowsPath(root);
-    return resolvedTarget === resolvedRoot || resolvedTarget.startsWith(`${resolvedRoot}${path.sep}`);
+    const comparableRoot = toComparablePath(root);
+    return (
+      comparableTarget === comparableRoot ||
+      comparableTarget.startsWith(`${comparableRoot}${path.win32.sep}`)
+    );
   });
 
   if (!allowed) {
@@ -49,9 +66,16 @@ async function main(): Promise<void> {
     throw new Error("open-in-explorer is Windows-only (requires explorer.exe).");
   }
 
-  const allowRoots = process.argv.slice(2);
+  const cliRoots = process.argv.slice(2);
+  const envRoots = (process.env.OPEN_IN_EXPLORER_ALLOW_ROOTS ?? "")
+    .split(";")
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+  const allowRoots = [...cliRoots, ...envRoots];
   if (allowRoots.length < 1) {
-    throw new Error("Usage: node dist/index.js <allowRoot1> [allowRoot2 ...]");
+    throw new Error(
+      "Usage: node dist/index.js <allowRoot1> [allowRoot2 ...] OR set OPEN_IN_EXPLORER_ALLOW_ROOTS=C:\\a;D:\\b",
+    );
   }
 
   const server = new McpServer({
