@@ -825,11 +825,26 @@
         return new Date(iso).toLocaleTimeString('zh-Hant-TW', { hour12: false });
       };
 
+      const scrollConsoleToLatest = () => {
+        [consoleLog, consoleLogLandscape].forEach((targetLog) => {
+          if (!targetLog) return;
+          targetLog.scrollTop = targetLog.scrollHeight;
+        });
+
+        // 區塊被收合後再展開時，需等待排版完成才可正確捲動到底。
+        window.requestAnimationFrame(() => {
+          [consoleLog, consoleLogLandscape].forEach((targetLog) => {
+            if (!targetLog) return;
+            targetLog.scrollTop = targetLog.scrollHeight;
+          });
+        });
+      };
+
       const appendLog = (text) => {
         [consoleLog, consoleLogLandscape].forEach((targetLog) => {
           targetLog.textContent += `\n${text}`;
-          targetLog.scrollTop = targetLog.scrollHeight;
         });
+        scrollConsoleToLatest();
       };
 
       const appendChatLog = (speaker, text) => {
@@ -1201,7 +1216,15 @@
         [consoleLog, consoleLogLandscape].forEach((targetLog) => {
           targetLog.textContent = '[system] console 已清空';
         });
+        scrollConsoleToLatest();
         lastUpdated.textContent = toLocalTime(new Date().toISOString());
+      });
+
+      document.addEventListener('click', (event) => {
+        if (!(event.target instanceof HTMLElement) || !event.target.classList.contains('collapsible-trigger')) return;
+        const parentBlock = event.target.closest('[aria-label="console"]');
+        if (!parentBlock) return;
+        window.requestAnimationFrame(scrollConsoleToLatest);
       });
 
 
