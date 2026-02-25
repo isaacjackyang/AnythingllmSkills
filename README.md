@@ -312,3 +312,14 @@ Connector 會解析前綴後，把剩餘文字作為真正 query。
 python3 -m http.server 8080
 # 然後開啟 http://localhost:8080/examples/photo-2d-motion.html
 ```
+
+## 新增：open-in-explorer MCP server（Windows）
+
+若你希望「打開 XXX 檔案」的語意是「在 Windows 檔案總管選取檔案」，請使用本 repo 內的 `mcp-open-in-explorer/`。
+
+- 只提供一個 tool：`open_in_explorer`
+- 只做 `explorer.exe /select, <path>`
+- 僅允許 allowlist root 之下路徑（例如 `C:\agent_sandbox`）
+- 不提供任何讀寫檔案能力（與 filesystem server 權限分離）
+
+參考：`mcp-open-in-explorer/README.md`。

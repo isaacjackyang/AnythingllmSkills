@@ -176,6 +176,7 @@
         margin-top: 0.7rem;
         display: flex;
         gap: 0.55rem;
+        flex-wrap: wrap;
       }
 
       .ctrl-btn {
@@ -207,6 +208,51 @@
       .console h2 {
         margin: 0 0 0.5rem;
         font-size: 0.95rem;
+      }
+
+      .flow-card {
+        margin-top: 0.7rem;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 14px;
+        background: rgba(15, 23, 42, 0.56);
+        padding: 0.65rem;
+      }
+
+      .flow-card h3 {
+        margin: 0 0 0.45rem;
+        font-size: 0.82rem;
+        color: #bfdbfe;
+        letter-spacing: 0.02em;
+      }
+
+      .flow-help {
+        margin: 0 0 0.55rem;
+        font-size: 0.73rem;
+        color: #94a3b8;
+      }
+
+      .flow-svg {
+        width: 100%;
+        height: 260px;
+        display: block;
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.85);
+      }
+
+      .flow-legend {
+        margin-top: 0.55rem;
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        font-size: 0.7rem;
+        color: #cbd5e1;
+      }
+
+      .chip {
+        border-radius: 999px;
+        padding: 0.14rem 0.45rem;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        background: rgba(30, 41, 59, 0.6);
       }
 
       @media (orientation: landscape) {
@@ -251,6 +297,7 @@
             <input id="photoInput" type="file" accept="image/*" />
           </label>
           <button id="motionToggle" class="motion-btn" type="button">暫停動作</button>
+          <button id="pauseAndClearStage" class="motion-btn" type="button">暫停並清畫面</button>
         </div>
         <canvas id="motionCanvas" width="960" height="640" role="img" aria-label="照片人物 2D 骨架動作模擬"></canvas>
       </section>
@@ -288,6 +335,18 @@
               <button id="stopAgent" class="ctrl-btn stop" type="button">停止 Agent</button>
               <button id="clearConsole" class="ctrl-btn" type="button">清除 Console</button>
             </div>
+
+            <article class="flow-card" aria-label="API 資料流">
+              <h3>API 資料流拓樸（卡片式）</h3>
+              <p class="flow-help">以方塊卡片呈現目前元件（UI / Gateway / AnythingLLM / Ollama / gpt-oss:20b），連線旁標示通訊方式（API / Local Runtime）。</p>
+              <svg id="flowSvg" class="flow-svg" viewBox="0 0 980 300" role="img" aria-label="UI 到 LLM 的實際資料流與通訊方式"></svg>
+              <div class="flow-legend">
+                <span class="chip">🟢 Active path</span>
+                <span class="chip">🟡 Paused path</span>
+                <span class="chip">🔹 HTTP API / Webhook</span>
+                <span class="chip">🧠 Local runtime / provider call</span>
+              </div>
+            </article>
           </section>
           </section>
         </div>
@@ -319,13 +378,31 @@
       const resumeBtn = document.getElementById('resumeAgent');
       const stopBtn = document.getElementById('stopAgent');
       const clearConsoleBtn = document.getElementById('clearConsole');
+      const flowSvg = document.getElementById('flowSvg');
       const photoInput = document.getElementById('photoInput');
       const motionToggle = document.getElementById('motionToggle');
+      const pauseAndClearStageBtn = document.getElementById('pauseAndClearStage');
       const motionCanvas = document.getElementById('motionCanvas');
       const motionCtx = motionCanvas.getContext('2d');
 
       let runningMotion = true;
       let backgroundImage = null;
+
+      const flowConfig = {
+        nodes: [
+          { id: 'ui', title: 'Dashboard UI', subtitle: 'approval_ui/index.html', x: 30, y: 105, w: 180, h: 78, kind: 'control' },
+          { id: 'gateway', title: 'Gateway', subtitle: '/api/agent/control', x: 250, y: 105, w: 180, h: 78, kind: 'core' },
+          { id: 'anythingllm', title: 'AnythingLLM', subtitle: 'Developer API /chat', x: 470, y: 105, w: 180, h: 78, kind: 'brain' },
+          { id: 'ollama', title: 'Ollama', subtitle: 'Model Provider', x: 700, y: 40, w: 180, h: 78, kind: 'integration' },
+          { id: 'gptoss', title: 'gpt-oss:20b (LLM)', subtitle: 'Inference Runtime', x: 700, y: 180, w: 180, h: 78, kind: 'integration' },
+        ],
+        edges: [
+          { from: 'ui', to: 'gateway', label: 'HTTP API: GET/POST /api/agent/control' },
+          { from: 'gateway', to: 'anythingllm', label: 'HTTP API: /api/v1/workspace/:id/chat' },
+          { from: 'anythingllm', to: 'ollama', label: 'Provider API call' },
+          { from: 'ollama', to: 'gptoss', label: 'Local model runtime' },
+        ],
+      };
 
       const basePose = {
         head: { x: 460, y: 160 },
@@ -401,6 +478,20 @@
         }
       });
 
+      const clearStageCanvas = () => {
+        motionCtx.clearRect(0, 0, motionCanvas.width, motionCanvas.height);
+        motionCtx.fillStyle = '#020617';
+        motionCtx.fillRect(0, 0, motionCanvas.width, motionCanvas.height);
+      };
+
+      pauseAndClearStageBtn.addEventListener('click', () => {
+        runningMotion = false;
+        backgroundImage = null;
+        motionToggle.textContent = '繼續動作';
+        clearStageCanvas();
+        appendLog('[stage] 已暫停動畫並清除左側畫面');
+      });
+
       const renderMotion = (timestamp) => {
         motionCtx.clearRect(0, 0, motionCanvas.width, motionCanvas.height);
 
@@ -445,6 +536,73 @@
         });
       };
 
+      const renderFlow = (controlState) => {
+        if (!flowSvg) return;
+
+        const nodeMap = new Map(flowConfig.nodes.map((node) => [node.id, node]));
+        const isActive = controlState?.assistant_status === 'Running';
+        const isPaused = controlState?.assistant_status === 'Paused';
+
+        const edgeColor = isActive ? '#22d3ee' : (isPaused ? '#f59e0b' : '#64748b');
+
+        const edgeMarkup = flowConfig.edges.map((edge) => {
+          const from = nodeMap.get(edge.from);
+          const to = nodeMap.get(edge.to);
+          if (!from || !to) return '';
+
+          const startX = from.x + from.w;
+          const startY = from.y + (from.h / 2);
+          const endX = to.x;
+          const endY = to.y + (to.h / 2);
+          const bendX = (startX + endX) / 2;
+          const path = `M ${startX} ${startY} C ${bendX} ${startY}, ${bendX} ${endY}, ${endX} ${endY}`;
+
+          const labelX = bendX;
+          const labelY = ((startY + endY) / 2) - 8;
+
+          return `
+            <path d="${path}" fill="none" stroke="${edgeColor}" stroke-width="3" marker-end="url(#arrowhead)" opacity="0.9" />
+            <rect x="${labelX - 130}" y="${labelY - 11}" width="260" height="18" rx="9" fill="rgba(15,23,42,0.95)" stroke="rgba(148,163,184,0.35)" />
+            <text x="${labelX}" y="${labelY + 2}" fill="#cbd5e1" font-size="11" text-anchor="middle">${edge.label}</text>
+          `;
+        }).join('');
+
+        const nodeMarkup = flowConfig.nodes.map((node) => {
+          const fillByKind = {
+            integration: '#0f172a',
+            core: '#0b253a',
+            control: '#1e1b4b',
+            brain: '#032d39',
+          };
+
+          const activeNode = isActive && ['gateway', 'anythingllm', 'ollama', 'gptoss'].includes(node.id);
+          const pausedNode = isPaused && ['gateway', 'anythingllm'].includes(node.id);
+          const stroke = activeNode ? '#22d3ee' : (pausedNode ? '#f59e0b' : '#64748b');
+          const titleX = node.x + 12;
+          const titleY = node.y + 28;
+
+          return `
+            <g>
+              <rect x="${node.x}" y="${node.y}" width="${node.w}" height="${node.h}" rx="12" fill="${fillByKind[node.kind] || '#0f172a'}" stroke="${stroke}" stroke-width="2.5" />
+              <text x="${titleX}" y="${titleY}" fill="#e2e8f0" font-size="14" font-weight="700">${node.title}</text>
+              <text x="${titleX}" y="${titleY + 20}" fill="#94a3b8" font-size="11">${node.subtitle}</text>
+            </g>
+          `;
+        }).join('');
+
+        flowSvg.innerHTML = `
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="8" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"></polygon>
+            </marker>
+          </defs>
+          <g>
+            ${edgeMarkup}
+            ${nodeMarkup}
+          </g>
+        `;
+      };
+
       const applyControlState = (data) => {
         assistantStatus.textContent = data.assistant_status;
         executionStatus.textContent = data.execution_status;
@@ -455,6 +613,7 @@
         pauseBtn.disabled = !data.can.pause;
         resumeBtn.disabled = !data.can.resume;
         stopBtn.disabled = !data.can.stop;
+        renderFlow(data);
       };
 
       const refreshState = async () => {
@@ -537,7 +696,10 @@
         .catch((error) => {
           status.textContent = `無法連線控制 API：${error.message}`;
           appendLog(`[error] 無法連線控制 API：${error.message}`);
+          renderFlow();
         });
+
+      renderFlow();
     </script>
   </body>
 </html>
