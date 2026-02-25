@@ -7,6 +7,13 @@
         "@modelcontextprotocol/server-filesystem",
         "C:\\agent_sandbox"
       ]
+    },
+    "open-in-explorer": {
+      "command": "node",
+      "args": [
+        "C:\\agent_sandbox\\mcp-open-in-explorer\\dist\\index.js",
+        "C:\\agent_sandbox"
+      ]
     }
   }
 }
