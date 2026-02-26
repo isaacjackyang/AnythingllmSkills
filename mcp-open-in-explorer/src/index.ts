@@ -63,7 +63,13 @@ async function openInExplorerSelect(targetPath: string): Promise<void> {
 
 async function main(): Promise<void> {
   if (process.platform !== "win32") {
-    throw new Error("open-in-explorer is Windows-only (requires explorer.exe).");
+    throw new Error(
+      [
+        "open-in-explorer is Windows-only (requires explorer.exe).",
+        `Current platform: ${process.platform}`,
+        "Run this MCP server on native Windows (not Docker/WSL/Linux host).",
+      ].join(" "),
+    );
   }
 
   const cliRoots = process.argv.slice(2);
