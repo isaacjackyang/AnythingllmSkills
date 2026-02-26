@@ -132,6 +132,77 @@ node dist/index.js
 
 如果你不想把白名單寫在 args，也可以改用環境變數 `OPEN_IN_EXPLORER_ALLOW_ROOTS`。
 
+## 5.1) 一鍵啟動（PowerShell）
+
+專案內提供 `start_open_in_explorer.ps1`，可一鍵完成 install/build 並啟動：
+
+```powershell
+cd mcp-open-in-explorer
+.\start_open_in_explorer.ps1 -AllowRoots C:\agent_sandbox
+```
+
+多白名單範例：
+
+```powershell
+.\start_open_in_explorer.ps1 -AllowRoots C:\agent_sandbox, D:\project_data
+```
+
+常用參數：
+- `-SkipInstall`：跳過 `npm install`
+- `-SkipBuild`：跳過 `npm run build`
+- `-NoPause`：結束時不等待按鍵
+
+---
+
+## 5.2) 啟動前檢查 / 安裝 / 打包 EXE（PowerShell）
+
+如果你要先做「環境檢查 + 安裝 + 編譯」，或要打包成可帶去其他電腦的 exe，可使用：
+
+```powershell
+cd mcp-open-in-explorer
+.\bootstrap_open_in_explorer.ps1
+```
+
+打包 exe：
+
+```powershell
+.\bootstrap_open_in_explorer.ps1 -BuildExe
+```
+
+打包後複製到指定資料夾（例如網路磁碟或安裝包目錄）：
+
+```powershell
+.\bootstrap_open_in_explorer.ps1 -BuildExe -ExeOutputDir D:\deploy\open-in-explorer
+```
+
+常用參數：
+- `-SkipInstall`：跳過 `npm install`
+- `-SkipBuild`：跳過 `npm run build`
+- `-BuildExe`：執行 `npm run package:win-x64`
+- `-ExeOutputDir <path>`：把 exe 額外複製到指定路徑
+- `-NoPause`：結束時不等待按鍵
+
+> 建議流程：先在開發機 `-BuildExe`，再把 `mcp-open-in-explorer-win-x64.exe` 帶到目標 Windows x64 主機執行。
+
+---
+
+## 5.3) 你說的兩種流程（正確）
+
+是的，你理解的流程是正確的，分成兩條路：
+
+1. **Source 腳本流程（最直覺）**
+   - 先跑：`./bootstrap_open_in_explorer.ps1`（或直接 `./start_open_in_explorer.ps1`）
+   - 再到 AnythingLLM 的 MCP 設定中啟用/重載 `open-in-explorer` server
+
+2. **EXE 佈署流程（跨機器）**
+   - 在打包機跑：`./bootstrap_open_in_explorer.ps1 -BuildExe`
+   - 把 `dist/mcp-open-in-explorer-win-x64.exe` 複製到目標 Windows x64 機器
+   - 在 AnythingLLM 的 MCP 設定把 command 指向該 exe，然後啟用/重載 server
+
+> 補充：兩種方式最終都要在 AnythingLLM 端把 `open-in-explorer` MCP server 打開（或 reload）才會生效。
+
+---
+
 ## 6) 與 AnythingLLM 整合（MCP 設定）
 
 範例：
