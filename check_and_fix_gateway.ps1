@@ -22,6 +22,7 @@ function Fail([string]$Message) {
   throw "[check-fix][error] $Message"
 }
 
+
 function Show-RequirementStatus([string]$Root, [string]$EnvPath, [string]$StartPath) {
   $requirements = @(
     @{ Name = "node command"; Type = "command"; Value = "node" },
@@ -205,7 +206,9 @@ $envPath = if ([System.IO.Path]::IsPathRooted($EnvFile)) { $EnvFile } else { Joi
 $startPath = if ([System.IO.Path]::IsPathRooted($StartScript)) { $StartScript } else { Join-Path $root $StartScript }
 
 Info "Project root: $root"
+
 Show-RequirementStatus -Root $root -EnvPath $envPath -StartPath $startPath
+
 
 Ensure-Command "node" | Out-Null
 Ensure-Command "npm" | Out-Null
