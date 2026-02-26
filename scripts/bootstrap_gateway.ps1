@@ -217,6 +217,7 @@ try {
 param(
   [string]$EnvFile = ".env.gateway",
   [switch]$OpenUi,
+  [switch]$NoOpenUi,
   [string]$UiUrl = "http://localhost:8787/approval-ui"
 )
 
@@ -240,7 +241,9 @@ if (Test-Path $ResolvedEnvFile) {
   Write-Warning "[start_gateway] Env file not found: $ResolvedEnvFile (continuing with current process env)"
 }
 
-if ($OpenUi) {
+$ShouldOpenUi = $OpenUi -or (-not $NoOpenUi)
+
+if ($ShouldOpenUi) {
   Start-Process $UiUrl
   Write-Host "[start_gateway] Opened UI: $UiUrl"
 }
@@ -257,8 +260,9 @@ npx tsx gateway/server.ts
   Log "Bootstrap completed."
   Log "1) Edit env file: $ResolvedEnvFile"
   Log "2) Load env (PowerShell): Get-Content '$ResolvedEnvFile' | ForEach-Object { if (`$_ -match '^\s*(?!#)([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable(`$matches[1], `$matches[2], 'Process') } }"
-  Log "3) Start gateway: .\$($StartScriptFile -replace '/', '\\')"
-  Log "4) Start gateway + open UI: .\$($StartScriptFile -replace '/', '\\') -OpenUi"
+  Log "3) Start gateway (auto open UI): .\$($StartScriptFile -replace '/', '\\')"
+  Log "4) Start gateway without opening UI: .\$($StartScriptFile -replace '/', '\\') -NoOpenUi"
+  Log "5) Start gateway + open UI explicitly: .\$($StartScriptFile -replace '/', '\\') -OpenUi"
 }
 finally {
   Show-FinalSummary
