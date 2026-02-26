@@ -1,60 +1,94 @@
-# Approval UI（審批控制台）新手說明
+# Approval UI（Gateway 控制台）說明
 
-這個資料夾提供最小可用的審批前端，用來處理「高風險操作要不要放行」。
+> 這個 UI 是 Gateway 附帶的「控制面板 + 測試前台」，不是完整產品前端。
 
-## 它不是什麼
+---
 
-- 不是 AnythingLLM 主 UI
-- 不是完整 CRM / 工單系統
+## 1) 這個 UI 實際用途
 
-## 它是什麼
+目前 `index.html` 主要負責：
 
-- 顯示待審批提案（pending proposals）
-- 提供 Approve / Reject
-- 把決策回傳給 Gateway
-- 提供 Agent 控制（Start / Pause / Resume / Stop）
-- 提供簡化 Web command 通道入口
+- 顯示 Gateway 存活狀態（health/lifecycle）
+- 管理 Agent 控制狀態（start/pause/resume/stop）
+- 管理 channel enable/disable
+- 發送 web command 到 `/api/agent/command`
+- 呈現簡化的操作輸出區，方便快速驗證流程
 
-## 載入方式
+你可以把它當「運維與驗證工具頁」。
 
-Approval UI 有兩種打開方式：
+---
 
-1. **Gateway route（建議）**：`http://localhost:8787/approval-ui`
-2. **本地檔案 fallback**：`gateway/web/approval_ui/index.html`
+## 2) 它不是什麼
 
-`start_gateway.ps1` 會優先嘗試 route，失敗才 fallback 到本地 HTML。
+- 不是 AnythingLLM 官方聊天 UI
+- 不是完整工單/審核平台
+- 不是多租戶管理後台
 
-## 目前會呼叫的 API
+---
 
-`index.html` 主要使用 Gateway 控制/狀態 API：
+## 3) 載入方式
 
+### A. 走 Gateway route（建議）
+
+`http://localhost:8787/approval-ui`
+
+優點：
+- 與後端同源，少掉本地檔案跨域問題
+- 最接近實際部署行為
+
+### B. 本地檔案 fallback
+
+`gateway/web/approval_ui/index.html`
+
+在 `start_gateway.ps1` 中，若 URL 開啟失敗會嘗試 fallback。
+
+---
+
+## 4) UI 依賴 API（請確認 Gateway 有開）
+
+- `GET /healthz`
 - `GET /api/agent/control`
 - `POST /api/agent/control`
 - `GET /api/channels`
 - `POST /api/channels`
-- `GET /healthz`
-- （發送操作指令時）`POST /api/agent/command`
+- `POST /api/agent/command`
 
-## 新手測試步驟
+只要其中任何關鍵 API 失敗，UI 上部分功能就會失效或顯示異常。
 
-1. 先在 repo 根目錄啟動 Gateway：
+---
+
+## 5) 新手驗證流程（最穩）
+
+1. 在 repo root 啟動 Gateway：
    ```powershell
    .\scripts\start_gateway.ps1
    ```
-2. 等待啟動輸出顯示 health check 通過。
-3. 打開 `http://localhost:8787/approval-ui`。
-4. 測試 `Start / Pause / Resume / Stop`。
-5. 若要驗證 web command，送一段指令並觀察後端 log 的 `trace_id`。
+2. 先檢查：
+   ```powershell
+   Invoke-RestMethod http://localhost:8787/healthz
+   ```
+3. 開啟 `http://localhost:8787/approval-ui`。
+4. 先做控制測試：`Start -> Pause -> Resume -> Stop`。
+5. 再測 web command：送一段簡單文本，確認有 response/trace。
 
-## 常見問題
+---
 
-### Q1：UI 打開了但按鈕沒反應？
-先檢查 `GET /healthz`、`GET /api/agent/control` 是否成功，若 API 失敗 UI 不會正常更新。
+## 6) 常見問題
 
-### Q2：為何顯示通道未連線？
-`connected` 是依近期活動計算，不代表永遠斷線；只要有活動就會變成 true。
+### Q1：頁面打得開，但按鈕沒反應？
+先看 `healthz`、`/api/agent/control`、`/api/channels` 是否正常回 200。
 
-### Q3：為何 Web command 會 503？
-通常是 `web_ui` channel 被停用，請到 `/api/channels` 檢查並重新啟用。
+### Q2：送 command 回 503？
+通常是 `web_ui` channel 被停用，請在 channel 控制中重新 enable。
 
-一句話：Approval UI 是「人工守門 + 控制面板」，不是主要聊天前台。
+### Q3：為什麼顯示 disconnected？
+channel 的 `connected` 依近期 activity 計算，不一定代表永久故障。
+
+---
+
+## 7) 給維運的建議
+
+- 這個頁面適合 smoke test，不建議當最終商用前台。
+- 若要客製化，優先保留 health/control/channel 三區塊，這是排障最關鍵資訊。
+
+一句話：Approval UI 是 Gateway 的「操作儀表板」，不是主產品介面。

@@ -1,25 +1,42 @@
-# anythingllm/ 目錄說明（新手版）
+# anythingllm/ 目錄說明（定位與邊界）
 
-這個資料夾不是拿來放「完整 AnythingLLM 原始碼」，而是放你在本專案中的 **Brain 側掛載點**。
+這個目錄在本 repo 的角色是：
+**放 AnythingLLM 相關掛載與整合素材的預留位置**。
 
-## 你會看到什麼
+目前它不是 AnythingLLM 主程式碼，也不是可直接啟動的服務目錄。
 
-- `workspaces/`：工作區相關掛載
-- `agents/`：代理人設定掛載
-- `skills/`：技能掛載
+---
 
-## 這有什麼用
+## 1) 你應該怎麼理解這個資料夾
 
-當 Gateway 把任務送給 Brain（AnythingLLM）時，Brain 會依據這些掛載內容知道：
+- 這裡放的是「你要對接 Brain 時的配置與結構約定」。
+- 真正執行邏輯主要在 `gateway/`。
+- AnythingLLM 本體通常在其他部署位置（Docker、獨立主機、其他 repo）。
 
-1. 目前有哪些能力可以用。
-2. 哪些工作區與代理人可被路由。
-3. 哪些技能可以被觸發。
+---
 
-## 新手建議
+## 2) 為什麼這樣設計
 
-- 不要直接在這裡亂塞大量測試檔，先有明確命名。
-- 每新增一個 skill 或 agent，務必在對應 README 或文件補上用途。
-- 任何會影響執行權限的改動，都要搭配 Gateway policy 檢查。
+把 Gateway 與 Brain 本體分離有三個好處：
 
-一句話：`anythingllm/` 是 Brain 的「可用資源目錄」，不是單純備份資料夾。
+1. Gateway 可獨立迭代治理能力（policy / audit / task control）。
+2. AnythingLLM 升級時不會綁死在同一份程式樹。
+3. 部署拓撲更彈性（同一個 Gateway 對不同 Brain 環境）。
+
+---
+
+## 3) 新手常見誤解
+
+- 誤解 A：以為 `anythingllm/` 裡會有完整 server 程式。→ 目前沒有。
+- 誤解 B：在這裡亂放臨時檔。→ 不建議，會污染掛載邏輯。
+- 誤解 C：改這裡就會立即改變 Gateway 行為。→ Gateway 行為以 `gateway/` 代碼為主。
+
+---
+
+## 4) 建議維護規則
+
+- 若新增 agent / workspace / skill 掛載約定，請同步更新本目錄說明。
+- 涉及權限或資料邊界的設定，務必同步檢查 Gateway policy。
+- 保持命名穩定（環境名稱、agent 名稱、workspace 名稱不要隨意改）。
+
+一句話：`anythingllm/` 在本專案是「Brain 整合契約的掛載位」，不是執行核心。
