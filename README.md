@@ -9,12 +9,12 @@
 
 你可以把它想成一條「訊息處理生產線」：
 
-1. 使用者從外部通道（例如 Telegram）丟一句話進來。
-2. Gateway 收到後，先做解析與風險判斷。
-3. Gateway 會找 AnythingLLM（Brain）產生 Proposal（建議執行方案）。
-4. Policy 決定這個 Proposal 能不能執行、要不要人工審批。
-5. Tool Runner 真的去做工具呼叫（例如 shell、HTTP、資料庫、排程）。
-6. 結果回傳給 AnythingLLM 生成自然語言回覆。
+1. 使用者從外部通道（例如 Telegram / LINE / Web UI）丟一句話進來。
+2. Gateway 收到後，先做事件整理與風險判斷。
+3. Gateway 向 AnythingLLM（Brain）要求 Proposal（建議執行方案）。
+4. Policy 決定 Proposal 允許 / 拒絕 / 需審批。
+5. Tool Runner 實際執行工具（shell / HTTP / DB / queue job 等）。
+6. 結果回傳給 AnythingLLM 生成自然語言。
 7. 最後再從通道回給使用者。
 
 如果你是非工程背景，請記住：
@@ -27,9 +27,9 @@
 ## 2. 專案主要資料夾（你最常看的）
 
 - `gateway/`：流程主控（連接器、路由、政策、審計、工具執行）
-- `anythingllm/`：Brain 側的掛載骨架（workspaces / agents / skills）
+- `anythingllm/`：Brain 側掛載骨架（workspaces / agents / skills）
 - `anythingllm-skills/`：實際技能（Skill）範本與實作
-- `mcp-open-in-explorer/`：一個 MCP server 範例（只負責打開檔案總管定位檔案）
+- `mcp-open-in-explorer/`：MCP server 範例（本機檔案定位）
 
 ---
 
@@ -37,10 +37,10 @@
 
 請先準備：
 
-- Node.js `>= 20`（建議 LTS）
+- Node.js `>= 20`
 - npm / npx
-- 可用的 AnythingLLM 實例
-- （若走 Telegram）可用的 bot token 與 webhook HTTPS 網址
+- 可用的 AnythingLLM 實例（含 API Key）
+- （若走 Telegram）可用 bot token 與可公開 HTTPS webhook
 
 檢查指令：
 
@@ -50,33 +50,29 @@ npm -v
 npx -v
 ```
 
-如果版本太舊，先升級再繼續，不要硬跑。
-
 ---
 
-## 4. 一鍵初始化（建議第一次都跑）
-
-本 repo 內建腳本：
+## 4. 初始化（建議第一次必跑）
 
 ```powershell
 .\scripts\bootstrap_gateway.ps1
 ```
 
-它會做幾件事：
+這個腳本會：
 
-- 檢查 Node.js / npm / npx 是否存在
-- 初始化 `package.json`（若不存在）
-- 安裝本地開發依賴（TypeScript/tsx）
-- 產生 `.env.gateway` 範本（已存在就不覆蓋）
-- 驗證 `tsc` 與 `tsx` 可執行
+- 檢查 `node / npm / npx`
+- 若不存在則建立 `package.json`
+- 安裝開發依賴（`typescript` / `tsx` / `@types/node`）
+- 產生 `.env.gateway`（已存在不覆蓋）
+- 產生 `scripts/start_gateway.ps1`（已存在不覆蓋）
 
-如果你只是想看環境變數模板：
+只看 env 範本：
 
 ```powershell
 .\scripts\bootstrap_gateway.ps1 -PrintEnv
 ```
 
-如果你公司網路限制 npm 安裝：
+公司網路限制安裝時：
 
 ```powershell
 .\scripts\bootstrap_gateway.ps1 -SkipTooling
@@ -84,104 +80,121 @@ npx -v
 
 ---
 
-## 5. 啟動 Gateway（最小路徑）
+## 5. 快速檢查與修復（新增）
+
+如果你遇到「已填 key 但啟動失敗 / Web 通道不通」：
+
+```powershell
+.\check_and_fix_gateway.ps1
+```
+
+它會做什麼：
+
+1. 列出需求掃描結果（`OK` / `MISSING`）
+   - `node` / `npm` / `npx`
+   - `scripts/bootstrap_gateway.ps1`
+   - `.env.gateway`
+   - `scripts/start_gateway.ps1`
+   - `gateway/web/approval_ui/index.html`
+2. 缺檔時自動呼叫 bootstrap 補齊（可用 `-ForceBootstrap` 強制）
+3. 檢查 `.env.gateway` 的 `ANYTHINGLLM_API_KEY` / `ANYTHINGLLM_BASE_URL`
+4. 檢查 `npx tsx` 是否可執行
+5. 可選：自動啟動 gateway 並檢查 `/healthz`
+
+常用參數：
+
+```powershell
+# 只掃描/修復，不啟動
+.\check_and_fix_gateway.ps1 -NoStart
+
+# 強制重跑 bootstrap 產物
+.\check_and_fix_gateway.ps1 -ForceBootstrap
+
+# 略過 bootstrap 依賴安裝
+.\check_and_fix_gateway.ps1 -SkipTooling
+```
+
+---
+
+## 6. 啟動 Gateway（正式流程）
 
 ```powershell
 .\scripts\start_gateway.ps1
 ```
 
-預設會在啟動時自動打開 Approval UI；若不想自動開啟：
+目前 `start_gateway.ps1` 行為：
+
+1. 載入 `.env.gateway`
+2. 背景啟動 `npx tsx gateway/server.ts`
+3. 輪詢 `http://localhost:8787/healthz`（預設等待 20 秒）
+4. 健康檢查後再嘗試開啟 Approval UI：
+   - 先開 `http://localhost:8787/approval-ui`
+   - 若失敗，退回開本地 `gateway/web/approval_ui/index.html`
+5. 最後等待 gateway process 結束
+
+不自動開 UI：
 
 ```powershell
 .\scripts\start_gateway.ps1 -NoOpenUi
 ```
 
-啟動後，先做健康檢查：
+手動健康檢查：
 
 ```powershell
 Invoke-RestMethod http://localhost:8787/healthz
 Invoke-RestMethod http://localhost:8787/lifecycle
 ```
 
-如果第一個就不通，先不要看 Telegram、不要看 Skill。先把 Gateway 本身跑起來。
+---
+
+## 7. Web 通道為何最先測？
+
+Web 通道通常最容易先打通，因為不需要 webhook 簽章與外部平台設定。
+
+最小驗證：
+
+1. `healthz` 正常
+2. 開 `/approval-ui`
+3. 測試 `POST /api/agent/command`
+
+若第 1 步失敗，請先修 Gateway 啟動，不要直接追 Telegram/LINE。
 
 ---
 
-## 6. Skill 開發規範（重點）
+## 8. 推薦落地順序（照這個做成功率高）
 
-目前採用 **Single Binary CLI First**：
-
-- Skill 專注在「輸入驗證 + 路由」
-- 有副作用的事（寫檔、跑命令、連 API）盡量集中到自有 CLI
-- 避免臨時拼接 Python/JS 腳本
-- 維持可審計、可重現、可追蹤
-
-你可以把輸出想成固定契約，至少包含：
-
-- `ok`
-- `action`
-- `data` 或 `error`
-- `audit`
-
-這樣未來要 debug 才不會靠猜。
-
----
-
-## 7. 推薦落地順序（照這個做，成功率最高）
-
-1. 先確認 `gateway/server.ts` 可啟動。
-2. 先用健康檢查 API 驗證 Gateway 活著。
-3. 再串 AnythingLLM API（確認 token 與 endpoint）。
-4. 再啟用單一 Skill（先最安全的讀/寫檔）。
-5. 再加高風險能力（例如 shell command）。
-6. 最後再接外部通道（Telegram/LINE/Web UI）與審批流程。
-
-不要一口氣全上，會很難定位錯誤來源。
-
----
-
-## 8. 除錯心法（給新手）
-
-遇到問題時請依序檢查：
-
-1. **程序有沒有啟動？**（server process）
-2. **埠有沒有在聽？**（預設 8787）
-3. **健康檢查是否 200？**
-4. **環境變數是否真的載入？**（不要只編輯不 `source`）
-5. **日誌有沒有 trace_id / audit？**
-6. **外部服務 token 是否可用？**
-
-原則：
-- 先確定基礎可用，再看業務邏輯。
-- 先看 logs，再改程式。
-- 一次只改一件事。
+1. 先確認 `gateway/server.ts` 可啟動
+2. 先驗證 `healthz` / `lifecycle`
+3. 再確認 AnythingLLM base URL + API key
+4. 再開 Web UI command path
+5. 最後才接 Telegram / LINE webhook
 
 ---
 
 ## 9. 常見問題（FAQ）
 
-### Q1：我什麼都設了，但還是不能用？
-通常是 `.env` 沒載入到目前 shell。請重新載入後再啟動。
+### Q1：我填了 key 還是失敗？
+常見是 `.env.gateway` 沒被載入、`ANYTHINGLLM_BASE_URL` 不對，或 `tsx` 其實沒法執行（公司 registry / proxy 封鎖）。
 
-### Q2：為什麼有 Proposal / Policy / Approval 這麼多層？
-因為這是把「能做」和「該不該做」分離，降低誤操作風險。
+### Q2：為什麼 start script 顯示有開 UI 但看不到？
+新版會先等健康檢查，再開 URL；若 URL 無法開，會 fallback 開本地 HTML。請看啟動輸出的 warning 判斷是哪一段失敗。
 
-### Q3：我可以直接讓模型執行 shell 嗎？
-技術上可以，但不建議。請先做 action allowlist、參數驗證、審計留痕。
+### Q3：Web 通道會不會也被「停用」？
+會。若 `web_ui` channel disabled，`/api/agent/command` 會回 `503`。
 
 ---
 
 ## 10. 下一步該看哪裡？
 
 - 想跑 Gateway：看 `gateway/README.md`
-- 想做 Approval UI：看 `gateway/web/approval_ui/README.md`
+- 想看 Approval UI：看 `gateway/web/approval_ui/README.md`
 - 想做 Skill：看 `anythingllm-skills/local-file-search-open/README.md`
-- 想用 MCP Explorer：看 `mcp-open-in-explorer/README.md`（包含白名單/路徑設定位置說明）
+- 想用 MCP Explorer：看 `mcp-open-in-explorer/README.md`
 - 想了解 Brain 掛載：看 `anythingllm/README.md`
 
 ---
 
 ## 11. 一句總結
 
-如果你照這份 README 從「先啟動 Gateway」開始，逐步把能力一個一個接上，
-你會得到一個 **可控、可審計、可擴充** 的 AnythingLLM 自動化系統，而不是一個「能跑但不敢上線」的黑盒子。
+請先把「Gateway 啟動 + healthz + Web 通道」打通，再往外擴展。
+這樣會得到一個 **可控、可審計、可擴充** 的系統，而不是難以定位問題的黑盒。

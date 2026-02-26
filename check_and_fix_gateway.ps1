@@ -22,6 +22,36 @@ function Fail([string]$Message) {
   throw "[check-fix][error] $Message"
 }
 
+
+function Show-RequirementStatus([string]$Root, [string]$EnvPath, [string]$StartPath) {
+  $requirements = @(
+    @{ Name = "node command"; Type = "command"; Value = "node" },
+    @{ Name = "npm command"; Type = "command"; Value = "npm" },
+    @{ Name = "npx command"; Type = "command"; Value = "npx" },
+    @{ Name = "bootstrap script"; Type = "file"; Value = (Join-Path $Root "scripts/bootstrap_gateway.ps1") },
+    @{ Name = "env file"; Type = "file"; Value = $EnvPath },
+    @{ Name = "start script"; Type = "file"; Value = $StartPath },
+    @{ Name = "approval ui html"; Type = "file"; Value = (Join-Path $Root "gateway/web/approval_ui/index.html") }
+  )
+
+  Write-Host ""
+  Write-Host "[check-fix] Current requirements scan"
+  Write-Host "[check-fix] ----------------------------------------------"
+  foreach ($req in $requirements) {
+    $status = $false
+    if ($req.Type -eq "command") {
+      $status = [bool](Get-Command $req.Value -ErrorAction SilentlyContinue)
+    } else {
+      $status = Test-Path $req.Value
+    }
+
+    $state = if ($status) { "OK" } else { "MISSING" }
+    Write-Host ("[check-fix] {0,-22} : {1,-7} ({2})" -f $req.Name, $state, $req.Value)
+  }
+  Write-Host "[check-fix] ----------------------------------------------"
+  Write-Host ""
+}
+
 function Resolve-ProjectRoot {
   if ($PSScriptRoot) {
     return $PSScriptRoot
@@ -176,6 +206,9 @@ $envPath = if ([System.IO.Path]::IsPathRooted($EnvFile)) { $EnvFile } else { Joi
 $startPath = if ([System.IO.Path]::IsPathRooted($StartScript)) { $StartScript } else { Join-Path $root $StartScript }
 
 Info "Project root: $root"
+
+Show-RequirementStatus -Root $root -EnvPath $envPath -StartPath $startPath
+
 
 Ensure-Command "node" | Out-Null
 Ensure-Command "npm" | Out-Null
