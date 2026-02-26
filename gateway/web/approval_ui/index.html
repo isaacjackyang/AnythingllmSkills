@@ -180,13 +180,14 @@
 
       .stage-controls {
         position: absolute;
-        top: 0.65rem;
+        top: 1.05rem;
         left: 0.65rem;
         right: 0.65rem;
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        justify-content: flex-start;
         gap: 0.5rem;
+        flex-wrap: wrap;
         z-index: 2;
       }
 
@@ -587,6 +588,7 @@
             <span class="upload-label">Pixel Agent 動畫（GitHub sprite 風格）</span>
             <button id="motionToggle" class="motion-btn" type="button">暫停動作</button>
             <button id="pauseAndClearStage" class="motion-btn" type="button">暫停並清畫面</button>
+            <button id="spriteGenderToggle" class="motion-btn" type="button">切換為男生</button>
           </div>
           <canvas id="motionCanvas" width="960" height="640" role="img" aria-label="Pixel Agent 像素角色動畫"></canvas>
         </section>
@@ -725,6 +727,7 @@
       const flowSvg = document.getElementById('flowSvg');
       const motionToggle = document.getElementById('motionToggle');
       const pauseAndClearStageBtn = document.getElementById('pauseAndClearStage');
+      const spriteGenderToggle = document.getElementById('spriteGenderToggle');
       const chatForm = document.getElementById('chatForm');
       const chatInput = document.getElementById('chatInput');
       const chatLog = document.getElementById('chatLog');
@@ -868,6 +871,7 @@
       let channelsApiConnected = false;
       let animationModeOverrideUntil = 0;
       let animationMode = 'sleep';
+      let spriteGender = 'female';
 
       const pixelSize = 8;
       const agentPalette = {
@@ -886,6 +890,19 @@
         glow: '#38bdf8',
       };
 
+
+      const maleAgentPalette = {
+        ...agentPalette,
+        hair: '#312e81',
+        hairDark: '#1e1b4b',
+        mouth: '#b91c1c',
+        dress: '#2563eb',
+        dressShade: '#1d4ed8',
+        sleeve: '#93c5fd',
+        legs: '#334155',
+        heel: '#0f172a',
+      };
+
       const drawPixelRect = (x, y, w, h, color) => {
         if (!color) return;
         motionCtx.fillStyle = color;
@@ -897,8 +914,9 @@
         );
       };
 
-      const drawPixelAgent = (anchorX, anchorY, frame) => {
+      const drawPixelAgent = (anchorX, anchorY, frame, gender) => {
         const px = (ox, oy, w, h, color) => drawPixelRect(anchorX + ox, anchorY + oy, w, h, color);
+        const palette = gender === 'male' ? maleAgentPalette : agentPalette;
 
         const bodyBob = Math.round(frame.bodyBob);
         const armSwing = Math.round(frame.armSwing);
@@ -909,51 +927,57 @@
         const leftLegStep = Math.max(0, legSwing);
         const rightLegStep = Math.max(0, -legSwing);
 
-        // 長髮（後側）
-        px(7, 1 + y, 8, 1, agentPalette.hairDark);
-        px(6, 2 + y, 10, 2, agentPalette.hair);
-        px(6, 4 + y, 2, 8, agentPalette.hairDark);
-        px(14, 4 + y, 2, 8, agentPalette.hairDark);
+        // 頭髮
+        if (gender === 'male') {
+          px(7, 1 + y, 8, 1, palette.hairDark);
+          px(6, 2 + y, 10, 2, palette.hair);
+          px(7, 4 + y, 8, 1, palette.hairDark);
+        } else {
+          px(7, 1 + y, 8, 1, palette.hairDark);
+          px(6, 2 + y, 10, 2, palette.hair);
+          px(6, 4 + y, 2, 8, palette.hairDark);
+          px(14, 4 + y, 2, 8, palette.hairDark);
+        }
 
         // 臉部
-        px(8, 3 + y, 6, 5, agentPalette.skin);
-        px(8, 8 + y, 6, 1, agentPalette.skinShadow);
-        px(8, 3 + y, 1, 6, agentPalette.outline);
-        px(13, 3 + y, 1, 6, agentPalette.outline);
+        px(8, 3 + y, 6, 5, palette.skin);
+        px(8, 8 + y, 6, 1, palette.skinShadow);
+        px(8, 3 + y, 1, 6, palette.outline);
+        px(13, 3 + y, 1, 6, palette.outline);
 
         // 五官
-        px(9, 5 + y, 1, 1, agentPalette.eye);
-        px(12, 5 + y, 1, 1, agentPalette.eye);
-        px(10, 7 + y, 2, 1 + mouthOpen, agentPalette.mouth);
+        px(9, 5 + y, 1, 1, palette.eye);
+        px(12, 5 + y, 1, 1, palette.eye);
+        px(10, 7 + y, 2, 1 + mouthOpen, palette.mouth);
 
         // 肩膀與洋裝上身
-        px(8, 9 + y, 6, 1, agentPalette.sleeve);
-        px(8, 10 + y, 6, 2, agentPalette.dress);
+        px(8, 9 + y, 6, 1, palette.sleeve);
+        px(8, 10 + y, 6, 2, palette.dress);
 
         // 手臂
-        px(6 - armSwing, 10 + y, 2, 2, agentPalette.sleeve);
-        px(5 - armSwing, 12 + y, 2, 3, agentPalette.skin);
-        px(14 + armSwing, 10 + y, 2, 2, agentPalette.sleeve);
-        px(15 + armSwing, 12 + y, 2, 3, agentPalette.skin);
+        px(6 - armSwing, 10 + y, 2, 2, palette.sleeve);
+        px(5 - armSwing, 12 + y, 2, 3, palette.skin);
+        px(14 + armSwing, 10 + y, 2, 2, palette.sleeve);
+        px(15 + armSwing, 12 + y, 2, 3, palette.skin);
 
         // 洋裝裙襬（A-line）
-        px(7, 12 + y, 8, 2, agentPalette.dress);
-        px(6, 14 + y, 10, 2, agentPalette.dress);
-        px(5, 16 + y, 12, 2, agentPalette.dressShade);
+        px(7, 12 + y, 8, 2, palette.dress);
+        px(6, 14 + y, 10, 2, palette.dress);
+        px(5, 16 + y, 12, 2, palette.dressShade);
 
         // 雙腿（修復：腿明確畫在裙襬下方）
-        px(8, 18 + y, 2, 3 + leftLegStep, agentPalette.legs);
-        px(12, 18 + y, 2, 3 + rightLegStep, agentPalette.legs);
+        px(8, 18 + y, 2, 3 + leftLegStep, palette.legs);
+        px(12, 18 + y, 2, 3 + rightLegStep, palette.legs);
 
         // 高跟鞋
-        px(8, 21 + y + leftLegStep, 2, 1, agentPalette.heel);
-        px(12, 21 + y + rightLegStep, 2, 1, agentPalette.heel);
-        px(9, 22 + y + leftLegStep, 2, 1, agentPalette.heel);
-        px(13, 22 + y + rightLegStep, 2, 1, agentPalette.heel);
+        px(8, 21 + y + leftLegStep, 2, 1, palette.heel);
+        px(12, 21 + y + rightLegStep, 2, 1, palette.heel);
+        px(9, 22 + y + leftLegStep, 2, 1, palette.heel);
+        px(13, 22 + y + rightLegStep, 2, 1, palette.heel);
 
         // 輪廓強化
-        px(5, 16 + y, 1, 7, agentPalette.outline);
-        px(16, 16 + y, 1, 7, agentPalette.outline);
+        px(5, 16 + y, 1, 7, palette.outline);
+        px(16, 16 + y, 1, 7, palette.outline);
       };
 
       const drawSpeechBubble = (x, y, text, pulse) => {
@@ -1108,6 +1132,11 @@
         appendLog('[stage] 已暫停 Pixel Agent 動畫並清除左側畫面');
       });
 
+      spriteGenderToggle?.addEventListener('click', () => {
+        spriteGender = spriteGender === 'female' ? 'male' : 'female';
+        spriteGenderToggle.textContent = spriteGender === 'female' ? '切換為男生' : '切換為女生';
+      });
+
       const renderMotion = (timestamp) => {
         motionCtx.clearRect(0, 0, motionCanvas.width, motionCanvas.height);
 
@@ -1128,11 +1157,11 @@
         const basePixelX = baseCellX * pixelSize;
         const basePixelY = baseCellY * pixelSize;
 
-        drawPixelAgent(baseCellX, baseCellY, state);
+        drawPixelAgent(baseCellX, baseCellY, state, spriteGender);
 
         motionCtx.fillStyle = '#94a3b8';
         motionCtx.font = '600 18px "Noto Sans TC", sans-serif';
-        motionCtx.fillText(`Pixel Agent 女生（${state.stageText}）`, 80, 56);
+        motionCtx.fillText(`Pixel Agent ${spriteGender === 'female' ? '女生' : '男生'}（${state.stageText}）`, 80, 56);
 
         motionCtx.fillStyle = `rgba(56, 189, 248, ${0.22 + state.pulse * 0.3})`;
         motionCtx.beginPath();
@@ -1434,7 +1463,8 @@
         Object.entries(mapping).forEach(([key, target]) => {
           const item = channels[key];
           if (!item) return;
-          target.textContent = item.enabled ? '目前：啟用' : '目前：停用';
+          const enabledText = item.enabled ? '目前：啟用' : '目前：停用';
+          target.textContent = `${enabledText}｜狀態：已連接`;
           target.style.color = item.enabled ? '#67e8f9' : '#fda4af';
           const button = document.querySelector(`[data-channel-toggle="${key}"]`);
           if (button) {
