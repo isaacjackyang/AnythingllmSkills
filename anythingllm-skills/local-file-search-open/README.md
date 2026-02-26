@@ -1,110 +1,95 @@
-# local-file-search-open Skill（超詳細新手說明）
+# local-file-search-open Skill 說明（依目前程式行為）
 
-> 目標：讓 AnythingLLM 能在「限定目錄」中安全地做檔案搜尋、讀取、以及開啟檔案定位。
-
----
-
-## 1. 這個 Skill 在做什麼？
-
-這個 skill 把三件常見需求包在一起：
-
-1. **search**：找檔案（例如找 `report.pdf`）
-2. **read**：讀檔案文字內容（通常是 txt/md/json 等）
-3. **open**：在本機檔案管理器中直接開啟或定位檔案
-
-你可以把它想成「受管控的本地檔案助手」。
+> 這份說明以 `handler.js` 實作為準。
+> 先說重點：**這個 skill 目前只做「檔名搜尋」+「可選擇開啟 Explorer 定位第一筆結果」**，不提供檔案內容讀取。
 
 ---
 
-## 2. 為什麼要「受管控」？
+## 1) 目前功能邊界（務必先搞清楚）
 
-因為 AI 如果可以任意讀你整台電腦，風險非常高。
+### 有做
 
-所以這個 skill 的核心原則是：
+1. 依 `keyword` 遞迴搜尋檔名。
+2. 支援 `searchScope`：`all` / `c` / `d` / `custom`。
+3. 可限制 `maxResults`（內部會 clamp 到 1~100）。
+4. `openExplorer=true` 且有結果時，會嘗試開啟 Windows Explorer 並定位第一筆結果。
+5. 非 Windows 環境仍可搜尋，但 open explorer 會回「不支援」。
 
-- **只允許 allowlist 路徑**（白名單資料夾）
-- **拒絕路徑跳脫**（例如 `..` 或奇怪符號繞過）
-- **輸出結構一致**（方便日誌與審計）
+### 沒做
 
----
-
-## 3. 你需要先準備什麼
-
-- AnythingLLM 可正常運作
-- Skill 能被 AnythingLLM 載入
-- 你已決定安全根目錄（例如 `C:\agent_sandbox` 或 `/srv/agent_sandbox`）
-
-請先確定你真的有權限存取該目錄。
+- ❌ 不讀取檔案內容（沒有 read API）
+- ❌ 不做 allowlist 白名單保護
+- ❌ 不做檔案寫入/刪除
 
 ---
 
-## 4. 建議的操作流程（照做就好）
+## 2) 參數說明（輸入）
 
-1. 先把你要給 AI 存取的檔案都放進 allowlist 目錄。
-2. 啟用 skill 後，先測 `search` 是否只回傳該目錄內容。
-3. 再測 `read`（先讀小檔案，確認編碼與大小限制）。
-4. 最後測 `open`（確認只會開允許路徑）。
+`handler({ input })` 目前使用欄位：
 
-不要一開始就把系統根目錄加進 allowlist，這是最常見錯誤。
-
----
-
-## 5. 常見參數與行為（概念層）
-
-### search
-- 輸入：關鍵字 / 副檔名 / 路徑範圍
-- 輸出：符合條件的檔案清單（通常含完整路徑）
-
-### read
-- 輸入：目標檔案路徑
-- 輸出：文字內容（可能會有最大長度限制）
-
-### open
-- 輸入：目標檔案路徑
-- 輸出：成功/失敗狀態（由系統打開檔案管理器）
+- `keyword`（必填）：搜尋關鍵字（比對檔名）
+- `searchScope`（選填）：`all` / `c` / `d` / `custom`（預設 `d`）
+- `rootPath`（選填）：當 `searchScope=custom` 時使用
+- `maxResults`（選填）：預設 20，最大 100
+- `openExplorer`（選填）：布林值，是否在有結果時開啟 Explorer
 
 ---
 
-## 6. 安全建議（務必看）
+## 3) 輸出欄位（回傳）
 
-- allowlist 盡量小：例如只給 `C:\agent_sandbox\docs`
-- 禁止敏感目錄：例如系統目錄、密鑰目錄、使用者主目錄全開放
-- 為 read/search 設定輸出上限，避免一次吐大量內容
-- 每次執行都保留審計紀錄（誰在什麼時間讀了什麼）
+成功時回傳類似：
 
----
+- `ok`
+- `keyword`
+- `searchScope`
+- `rootPath`
+- `scannedRoots`
+- `warning`
+- `count`
+- `matches`
+- `explorer`
+- `message`
 
-## 7. 測試清單（新手可直接照抄）
-
-### 功能測試
-1. 搜尋存在檔案（應成功）
-2. 搜尋不存在檔案（應回空）
-3. 讀取文字檔（應看到內容）
-4. open 合法路徑（應成功）
-
-### 安全測試
-1. 讀取 allowlist 外路徑（應拒絕）
-2. 使用 `../` 嘗試跳脫（應拒絕）
-3. 讀超大檔案（應被限制或截斷）
+失敗時常見是：
+- `ok: false`
+- `message: ...`
 
 ---
 
-## 8. 故障排除
+## 4) 平台行為差異
 
-### 問題：找不到任何檔案
-- 檢查 allowlist 設定
-- 檢查 skill 進程的執行帳號是否有權限
+### Windows
 
-### 問題：open 沒反應
-- 可能是執行環境無桌面（例如純 server）
-- 或本機未正確配置檔案管理器呼叫
+- `c/d/all/custom` 會按磁碟路徑判斷。
+- `openExplorer` 透過 `explorer.exe /select,<path>` 嘗試開啟。
 
-### 問題：讀到亂碼
-- 檢查檔案編碼（UTF-8 / Big5 / UTF-16）
-- 在 skill 端加上編碼處理策略
+### 非 Windows
+
+- 搜尋根路徑會回退到 `rootPath` 或 `process.cwd()`。
+- `openExplorer` 會回覆不支援訊息，不會真的打開檔案管理器。
 
 ---
 
-## 9. 一句總結
+## 5) 新手建議測試案例
 
-`local-file-search-open` 的價值不在「能讀檔」，而在「**安全、可控、可稽核地** 讀檔與開檔」。
+1. `keyword` 有命中 → `count > 0`
+2. `keyword` 無命中 → `count = 0`
+3. `searchScope=custom` 且路徑不存在 → `ok=false`
+4. `openExplorer=true` + 有命中（Windows）→ `explorer.opened=true`
+5. `maxResults` 填超大值 → 結果筆數不超過 100
+
+---
+
+## 6) 風險提醒（專家視角）
+
+因為目前沒有 allowlist：
+
+- 在 Windows `all` 範圍下，可能掃描大量磁碟路徑。
+- 若要上正式環境，建議先改成「固定受控根路徑」或加入 allowlist 驗證。
+- 建議加上排除目錄、掃描深度或執行時間上限，避免掃描過久。
+
+---
+
+## 7) 一句總結
+
+`local-file-search-open` 現階段是「檔名搜尋 + Explorer 定位」的實用小 skill；若要上線到高安全環境，需先補 allowlist 與掃描治理策略。

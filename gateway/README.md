@@ -1,36 +1,41 @@
-# Gateway 使用說明（把你當第一次碰後端的人）
+# Gateway 深入說明（給新手，但細節到可上線）
 
-> 你可以把 Gateway 想成「總調度中心」。
-> 所有外部訊息、風險判斷、工具執行、審計記錄，幾乎都經過它。
-
----
-
-## 1. Gateway 負責哪些事？
-
-Gateway 主要做 6 件事：
-
-1. 接收外部訊息（Telegram / LINE / Web UI）
-2. 整理成內部事件格式（含 `trace_id`）
-3. 向 AnythingLLM 要 Proposal
-4. 套用 Policy（允許 / 拒絕 / 審批）
-5. 呼叫 Tool Runner 執行工具
-6. 把結果回傳給通道使用者
+> Gateway 是這個 repo 的執行核心。
+> 你可以把它視為：**通道入口 + AI orchestration + 安全治理 + 任務控制 + 審計觀測**。
 
 ---
 
-## 2. 目錄導覽（先看這幾個）
+## 1. Gateway 在架構中的定位
 
-- `server.ts`：Gateway 入口與 HTTP 路由
-- `connectors/`：通道連接器（telegram / line）
-- `core/router.ts`：核心流程編排
-- `core/policy/`：風險政策
-- `core/tools/`：工具執行
-- `core/audit/`：審計紀錄
-- `workers/`：背景工作（task runner）
+Gateway 做的事情不是「替代 LLM」，而是把 LLM 的能力包進可治理流程：
+
+1. 接收通道請求（Telegram / LINE / Web UI）。
+2. 標準化事件結構（sender、conversation、workspace、agent、trace_id）。
+3. 呼叫 AnythingLLM client 取得提案與回覆。
+4. 套用 policy 與控制狀態（agent control / channel control）。
+5. 分派工具與任務（含 queue job + task runner）。
+6. 回傳結果並保留可追蹤資訊。
 
 ---
 
-## 3. 啟動前檢查
+## 2. 目錄導覽（以目前程式碼為準）
+
+- `server.ts`：HTTP server 與所有 API/ingress 路由。
+- `connectors/telegram`, `connectors/line`：訊息平台轉換與 reply 邏輯。
+- `core/router.ts`：核心事件路由協調。
+- `core/anythingllm_client.ts`：對 AnythingLLM API 的封裝。
+- `core/policy/`：規則與角色層。
+- `core/tools/`：工具能力（shell/http/db/queue_job）。
+- `core/tasks/`：任務資料存取。
+- `core/lifecycle.ts`：心跳與生命週期狀態。
+- `workers/job_runner.ts`：背景任務輪詢執行。
+- `web/approval_ui/`：控制台前端靜態頁。
+
+> 注意：`connectors/discord`、`connectors/slack` 有檔案，但目前 `server.ts` 實際啟用的是 telegram/line/web_ui 流程。
+
+---
+
+## 3. 啟動前環境要求
 
 ```powershell
 node -v
@@ -40,121 +45,128 @@ npx -v
 
 建議 Node.js >= 20。
 
-此外請先確認：
+必要環境變數（主要在 `.env.gateway`）：
 
-- `.env.gateway` 已存在
-- `ANYTHINGLLM_API_KEY` 已填
-- `ANYTHINGLLM_BASE_URL` 指向可達的 AnythingLLM
+- `PORT`（預設 8787）
+- `ANYTHINGLLM_BASE_URL`（預設 `http://localhost:3001`）
+- `ANYTHINGLLM_API_KEY`（空值會導致 brain call 失敗）
+- `DEFAULT_WORKSPACE`
+- `DEFAULT_AGENT`
+- （可選）`TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`
+- （可選）`LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`
+- （可選）`HEARTBEAT_INTERVAL_MS`, `TASK_RUNNER_INTERVAL_MS`
 
 ---
 
-## 4. 推薦啟動順序
+## 4. 標準啟動流程（推薦）
 
-### Step A：先跑檢查修復腳本
+### 4.1 初始化
+
+```powershell
+.\scripts\bootstrap_gateway.ps1
+```
+
+### 4.2 檢查/修復
 
 ```powershell
 .\check_and_fix_gateway.ps1 -NoStart
 ```
 
-它會明確列出需求掃描（`OK` / `MISSING`）：
-- `node` / `npm` / `npx`
-- `scripts/bootstrap_gateway.ps1`
-- `.env.gateway`
-- `scripts/start_gateway.ps1`
-- `gateway/web/approval_ui/index.html`
-
-並在缺檔時可自動補齊（搭配 `-ForceBootstrap`）。
-
-### Step B：正式啟動
+### 4.3 正式啟動
 
 ```powershell
 .\scripts\start_gateway.ps1
 ```
 
-目前啟動腳本行為：
-
-1. 載入 `.env.gateway`
-2. 背景啟動 `npx tsx gateway/server.ts`
-3. 等待 `GET /healthz` 就緒（預設 20 秒）
-4. 嘗試開啟 `http://localhost:8787/approval-ui`
-5. URL 開啟失敗時 fallback 到本機 `gateway/web/approval_ui/index.html`
-6. 等待 gateway process 結束並回傳 exit code
-
-不自動開 UI：
-
-```powershell
-.\scripts\start_gateway.ps1 -NoOpenUi
-```
-
 ---
 
-## 5. 健康檢查與核心端點
+## 5. 啟動後 API 驗證清單
 
-啟動後先檢查：
+先跑健康狀態：
 
 ```powershell
 Invoke-RestMethod http://localhost:8787/healthz
 Invoke-RestMethod http://localhost:8787/lifecycle
+```
+
+再看控制面：
+
+```powershell
+Invoke-RestMethod http://localhost:8787/api/agent/control
 Invoke-RestMethod http://localhost:8787/api/channels
 ```
 
-重點端點：
+---
 
-- `GET /approval-ui`：Approval UI
-- `POST /api/agent/command`：Web UI 發送命令
-- `GET/POST /api/agent/control`：agent 狀態控制
-- `GET/POST /api/channels`：通道啟用狀態
-- `POST /ingress/telegram`：Telegram ingress
-- `POST /ingress/line`：LINE ingress
+## 6. API 一覽（依 server.ts）
+
+### UI / 健康 / lifecycle
+- `GET /approval-ui`
+- `GET /healthz`
+- `GET /lifecycle`
+- `POST /lifecycle/soul`
+
+### 控制面
+- `GET /api/agent/control`
+- `POST /api/agent/control`（`start|pause|resume|stop`）
+- `GET /api/channels`
+- `POST /api/channels`（channel: `telegram|line|web_ui` + `enabled: boolean`）
+
+### Web command
+- `POST /api/agent/command`
+  - 若 `web_ui` channel disabled，回 `503`。
+
+### Ingress
+- `POST /ingress/telegram`
+  - 驗證 `x-telegram-bot-api-secret-token`（若有設定 secret）
+- `POST /ingress/line`
+  - 驗證 `x-line-signature`
+
+### Tasks
+- `GET /api/tasks?status=&limit=`
+- `GET /api/tasks/:id`
+- `POST /api/tasks/:id/cancel`
+- `DELETE /api/tasks/:id`
+- `POST /api/tasks/run-once`
 
 ---
 
-## 6. Web 通道（最小可行驗證）
+## 7. 新手實戰：先只測 Web UI 通道
 
-通常建議先測 web_ui，再測 Telegram/LINE：
+1. 啟動 gateway。
+2. 打開 `http://localhost:8787/approval-ui`。
+3. 確認 `/api/channels` 的 `web_ui` 是 enabled。
+4. 送 `POST /api/agent/command` 測試文字。
+5. 回傳應含 `trace_id`，可用於後續 log 對帳。
 
-1. `healthz` 為 ok
-2. 開 `http://localhost:8787/approval-ui`
-3. 呼叫 `POST /api/agent/command` 送一段文字
-
-若收到 `web_ui channel is disabled`，請先檢查 `/api/channels` 狀態。
-
----
-
-## 7. Telegram 串接（簡化流程）
-
-1. 設定 `TELEGRAM_BOT_TOKEN`
-2. 設定 webhook 到 `/ingress/telegram`
-3. 若有 `TELEGRAM_WEBHOOK_SECRET`，確認 header 相符
-4. 發送測試訊息並追 `trace_id`
-
-如果 webhook 收不到，優先檢查 HTTPS + 公開網域 + 反向代理。
+這條路徑穩定後，再接 Telegram/LINE。
 
 ---
 
-## 8. 常見失敗原因
+## 8. 常見故障與對應判斷
 
-1. `.env.gateway` 有填但未被載入
-2. `ANYTHINGLLM_BASE_URL` 可寫但不可達
-3. `ANYTHINGLLM_API_KEY` 值無效或權限不足
-4. `npx tsx` 無法執行（registry / proxy / policy）
-5. 通道被停用（`/api/channels`）
+- `healthz != ok`
+  - 優先看 gateway 是否啟動後立刻退出。
+- `web_ui command` 回 503
+  - 檢查 `POST /api/channels` 是否把 `web_ui` 關掉。
+- Telegram 401
+  - 檢查 webhook secret header。
+- LINE 401
+  - 檢查簽章驗證與原始 body 是否被中途改寫。
+- command 看似成功但沒回覆
+  - 檢查 AnythingLLM API key 與 base URL。
 
 ---
 
-## 9. 除錯順序（最重要）
+## 9. 建議營運習慣
 
-1. `healthz` 是否正常
-2. env 是否載入
-3. AnythingLLM API 是否可達
-4. Proposal 是否成功
-5. Policy 是否阻擋
-6. Tool 是否執行失敗
-7. 回覆是否在通道端丟失
+- 每次異常保留 `trace_id`。
+- 先看健康與控制面，再看 connector。
+- 任何 channel 問題都先確認 enable 狀態。
+- 把 `.env.gateway` 管理納入部署流程（避免人工漏填）。
 
 ---
 
 ## 10. 一句總結
 
-Gateway 的關鍵價值是「把 AI 執行流程變成可治理系統」，
-不是只讓模型「會呼叫工具」而已。
+Gateway 的核心價值是把 AI 執行變成「可觀測、可控、可回放」的服務，不只是聊天 API 代理。
