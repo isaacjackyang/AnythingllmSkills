@@ -87,6 +87,30 @@
         font-size: 0.9rem;
       }
 
+      .dashboard-main {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.65rem 1rem;
+      }
+
+      .dashboard-intro {
+        flex: 1 1 320px;
+        min-width: 0;
+      }
+
+      .dashboard-intro p {
+        margin-bottom: 0;
+      }
+
+      .dashboard-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        flex-wrap: wrap;
+      }
+
       .start-btn {
         border: 0;
         border-radius: 999px;
@@ -216,7 +240,7 @@
       }
 
       .status {
-        margin-top: 0.6rem;
+        margin: 0;
         font-size: 0.95rem;
         color: #a5f3fc;
         min-height: 1.2em;
@@ -630,7 +654,18 @@
       }
 
       @media (orientation: portrait) {
-        .dashboard-main { display: block; }
+        .dashboard-main {
+          display: block;
+        }
+
+        .dashboard-actions {
+          margin-top: 0.6rem;
+        }
+
+        .status {
+          margin-top: 0.35rem;
+        }
+
         .console-landscape { display: none; }
         .dashboard-resizer { display: none; }
       }
@@ -665,10 +700,14 @@
 
       <section class="dashboard">
         <div class="dashboard-main">
-          <h1>Agent 啟動面板</h1>
-          <p>歡迎使用 Agent 控制台。按下按鈕後，系統會初始化流程並開始執行任務。</p>
-          <button id="startAgent" class="start-btn" type="button">Start Agent</button>
-          <p id="status" class="status" aria-live="polite"></p>
+          <div class="dashboard-intro">
+            <h1>Agent 啟動面板</h1>
+            <p>歡迎使用 Agent 控制台。按下按鈕後，系統會初始化流程並開始執行任務。</p>
+          </div>
+          <div class="dashboard-actions">
+            <button id="startAgent" class="start-btn" type="button">Start Agent</button>
+            <p id="status" class="status" aria-live="polite"></p>
+          </div>
 
           <section class="monitor" aria-label="Agent dashboard">
             <section id="dashboardPane" class="pane" role="region" aria-label="dashboard" data-collapsible data-collapsible-label="系統指標與控制">
