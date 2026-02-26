@@ -1464,7 +1464,8 @@
           const item = channels[key];
           if (!item) return;
           const enabledText = item.enabled ? '目前：啟用' : '目前：停用';
-          target.textContent = `${enabledText}｜狀態：已連接`;
+          const connectionText = item.enabled ? '已連接' : '已停用';
+          target.textContent = `${enabledText}｜狀態：${connectionText}`;
           target.style.color = item.enabled ? '#67e8f9' : '#fda4af';
           const button = document.querySelector(`[data-channel-toggle="${key}"]`);
           if (button) {
@@ -1636,7 +1637,7 @@
             if (!channelsApiConnected) {
               status.textContent = '重新嘗試連接通道狀態...';
               await refreshChannels();
-              status.textContent = '通道狀態已連接。';
+              status.textContent = '通道狀態 API 已連線。';
               appendLog('[channel] 已重新連接通道狀態 API');
               return;
             }

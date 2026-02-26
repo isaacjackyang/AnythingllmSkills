@@ -69,14 +69,24 @@ export class AnythingLlmClient implements BrainClient {
       model: this.model,
     };
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify(payload),
-    });
+    if (!this.apiKey) {
+      throw new Error("ANYTHINGLLM_API_KEY is empty. Please set it in .env.gateway before sending commands.");
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      const details = (error as Error).message || "unknown error";
+      throw new Error(`AnythingLLM connection failed (${url}): ${details}`);
+    }
 
     if (!response.ok) {
       const body = await response.text();
