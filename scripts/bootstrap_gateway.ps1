@@ -213,7 +213,7 @@ try {
       Add-InstallSummary "Created start script directory: $startScriptDirectory"
     }
 
-    @"
+    @'
 param(
   [string]$EnvFile = ".env.gateway",
   [switch]$OpenUi,
@@ -251,7 +251,7 @@ if ($ShouldOpenUi) {
 Set-Location $ProjectRoot
 Write-Host "[start_gateway] Starting gateway with: npx tsx gateway/server.ts"
 npx tsx gateway/server.ts
-"@ | Set-Content -Path $ResolvedStartScriptFile -Encoding UTF8
+'@ | Set-Content -Path $ResolvedStartScriptFile -Encoding UTF8
 
     Add-InstallSummary "Created start script: $ResolvedStartScriptFile"
     Log "Wrote start script: $ResolvedStartScriptFile"
