@@ -77,6 +77,25 @@ function Invoke-HealthCheck([string[]]$Roots, [int]$TimeoutSeconds) {
   }
 }
 
+function Write-AnythingLLMConfig([string]$EntrypointPath, [string[]]$Roots) {
+  $configPath = Join-Path $ScriptDirectory "dist/anythingllm_mcp_servers.json"
+  $config = [ordered]@{
+    mcpServers = [ordered]@{
+      filesystem = [ordered]@{
+        command = "npx"
+        args = @("-y", "@modelcontextprotocol/server-filesystem", "C:\agent_sandbox")
+      }
+      "open-in-explorer" = [ordered]@{
+        command = "node"
+        args = @($EntrypointPath) + $Roots
+      }
+    }
+  }
+
+  $config | ConvertTo-Json -Depth 8 | Set-Content -Path $configPath -Encoding utf8
+  Log "Generated AnythingLLM MCP config: $configPath"
+}
+
 function Wait-ForExit {
   if ($NoPause) {
     return
@@ -119,7 +138,8 @@ try {
     Log "Skip build (-SkipBuild)."
   }
 
-  if (-not (Test-Path (Join-Path $ScriptDirectory "dist/index.js"))) {
+  $entrypointPath = (Join-Path $ScriptDirectory "dist/index.js")
+  if (-not (Test-Path $entrypointPath)) {
     throw "[open-in-explorer][error] dist/index.js not found. Please run build first."
   }
 
@@ -137,6 +157,8 @@ try {
   }
 
   Log "Allow roots: $($resolvedRoots -join '; ')"
+  Write-AnythingLLMConfig -EntrypointPath $entrypointPath -Roots $resolvedRoots
+
   if ($HealthCheck) {
     Log "Running MCP server health check..."
     Invoke-HealthCheck -Roots $resolvedRoots -TimeoutSeconds $HealthCheckTimeoutSeconds
