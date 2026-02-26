@@ -106,13 +106,13 @@ node dist/index.js
 
 若兩者都設定，程式會把兩邊合併成最終白名單。
 
-另外，AnythingLLM 的 MCP 設定檔（例如 `anythingllm_mcp_servers.json`）裡，
+執行 `start_open_in_explorer.ps1` 後，會自動在 `dist/anythingllm_mcp_servers.json` 產生 AnythingLLM 可直接貼上的 MCP 設定。
 `open-in-explorer.args` 內傳給 `index.js` 的那些路徑，就是你現在實際在用的白名單來源之一。
 
 
 ### 在 AnythingLLM 設定檔中，哪一段是白名單？
 
-以本 repo 的 `anythingllm_mcp_servers.json` 為例：
+以 `start_open_in_explorer.ps1` 產生的 `dist/anythingllm_mcp_servers.json` 為例：
 
 - `open-in-explorer.args[0]`：`index.js` 的路徑（不是白名單）
 - `open-in-explorer.args[1...]`：每一個都是白名單根目錄
@@ -209,7 +209,15 @@ cd mcp-open-in-explorer
 
 ## 6) 與 AnythingLLM 整合（MCP 設定）
 
-範例：
+建議先執行：
+
+```powershell
+cd mcp-open-in-explorer
+.\start_open_in_explorer.ps1 -SkipInstall -SkipBuild -HealthCheck
+Get-Content .\dist\anythingllm_mcp_servers.json
+```
+
+輸出的 JSON 會是類似下面格式（`args[0]` 會是你本機建置後的 `dist/index.js` 實際路徑）：
 
 ```json
 {
