@@ -52,10 +52,10 @@ npx -v
 .\scripts\start_gateway.ps1
 ```
 
-如果想啟動後直接打開 Approval UI：
+預設會在啟動時自動打開 Approval UI；若不想自動開啟：
 
 ```powershell
-.\scripts\start_gateway.ps1 -OpenUi
+.\scripts\start_gateway.ps1 -NoOpenUi
 ```
 
 如果成功，預設監聽：`http://localhost:8787`

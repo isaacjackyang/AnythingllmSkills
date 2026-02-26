@@ -240,7 +240,7 @@
       .monitor {
         margin-top: 0.6rem;
         display: grid;
-        gap: 0.8rem;
+        gap: 0.62rem;
       }
 
       .pane {
@@ -307,7 +307,7 @@
       }
 
       .collapsible-block[data-collapsed="false"] .collapsible-body {
-        margin-top: 0.6rem;
+        margin-top: 0.45rem;
       }
 
       .collapsible-block[data-collapsed="true"] .collapsible-body {
@@ -330,7 +330,7 @@
       .metric-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.55rem;
+        gap: 0.45rem;
         overflow: auto;
       }
 
@@ -365,7 +365,7 @@
         margin-top: 0.7rem;
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.55rem;
+        gap: 0.42rem;
         overflow: auto;
       }
 
@@ -653,21 +653,21 @@
                     <span class="channel-name">Telegram</span>
                     <button class="channel-toggle" data-channel-toggle="telegram" type="button">切換</button>
                   </div>
-                  <div id="channelStateTelegram" class="channel-state">狀態讀取中...</div>
+                  <div id="channelStateTelegram" class="channel-state">未連接（待重試）</div>
                 </section>
                 <section class="channel-card" data-channel-card="line" data-collapsible data-collapsible-label="通道：LINE">
                   <div class="channel-head">
                     <span class="channel-name">LINE</span>
                     <button class="channel-toggle" data-channel-toggle="line" type="button">切換</button>
                   </div>
-                  <div id="channelStateLine" class="channel-state">狀態讀取中...</div>
+                  <div id="channelStateLine" class="channel-state">未連接（待重試）</div>
                 </section>
                 <section class="channel-card" data-channel-card="web_ui" data-collapsible data-collapsible-label="通道：Web UI">
                   <div class="channel-head">
                     <span class="channel-name">Web UI</span>
                     <button class="channel-toggle" data-channel-toggle="web_ui" type="button">切換</button>
                   </div>
-                  <div id="channelStateWebUi" class="channel-state">狀態讀取中...</div>
+                  <div id="channelStateWebUi" class="channel-state">未連接（待重試）</div>
                 </section>
               </div>
             </article>
@@ -864,6 +864,10 @@
       const flowNodes = flowConfig.nodes.map((node) => ({ ...node }));
       let flowLastControlState = null;
       let flowDragState = null;
+      let controlApiConnected = false;
+      let channelsApiConnected = false;
+      let animationModeOverrideUntil = 0;
+      let animationMode = 'sleep';
 
       const pixelSize = 8;
       const agentPalette = {
@@ -1003,45 +1007,85 @@
         const seconds = timestamp / 1000;
         const phase = seconds % 18;
 
-        if (phase < 6) {
-          const t = phase * 3.2;
-          return {
-            mode: 'walk',
-            stageText: '走動巡邏模式',
-            horizontalShift: Math.sin(phase * 0.7) * 2.8,
-            bodyBob: Math.sin(t) * 0.8,
-            armSwing: Math.sin(t) * 1.8,
-            legSwing: Math.sin(t + Math.PI) * 1.6,
-            mouthOpen: 0,
-            pulse: (Math.sin(t) + 1) / 2,
-          };
-        }
+        const buildState = (mode, t) => {
+          if (mode === 'sleep') {
+            return {
+              mode: 'sleep',
+              stageText: '未連接・睡眠待命',
+              horizontalShift: 0,
+              bodyBob: Math.sin(t * 0.8) * 0.2,
+              armSwing: 0,
+              legSwing: 0,
+              mouthOpen: 0,
+              pulse: (Math.sin(t * 0.4) + 1) / 2,
+            };
+          }
 
-        if (phase < 12) {
-          const t = (phase - 6) * 4.5;
+          if (mode === 'talk') {
+            return {
+              mode: 'talk',
+              stageText: '對話回覆中',
+              horizontalShift: 0,
+              bodyBob: Math.sin(t * 0.35) * 0.6,
+              armSwing: 1 + Math.sin(t) * 1.2,
+              legSwing: 0,
+              mouthOpen: (Math.sin(t) + 1) * 0.9,
+              pulse: (Math.sin(t * 0.8) + 1) / 2,
+            };
+          }
+
+          if (mode === 'think') {
+            return {
+              mode: 'think',
+              stageText: '分析與規劃中',
+              horizontalShift: Math.sin(t * 0.45) * 1.5,
+              bodyBob: Math.sin(t * 0.6) * 0.5,
+              armSwing: -1,
+              legSwing: 0,
+              mouthOpen: 0,
+              pulse: (Math.sin(t) + 1) / 2,
+            };
+          }
+
+          if (mode === 'paused' || mode === 'stopped') {
+            return {
+              mode: 'idle',
+              stageText: mode === 'paused' ? '任務暫停' : '任務停止',
+              horizontalShift: 0,
+              bodyBob: Math.sin(t * 0.7) * 0.15,
+              armSwing: 0,
+              legSwing: 0,
+              mouthOpen: 0,
+              pulse: (Math.sin(t * 0.5) + 1) / 2,
+            };
+          }
+
+          if (mode === 'running') {
+            return {
+              mode: 'walk',
+              stageText: '執行任務中',
+              horizontalShift: Math.sin(t * 0.7) * 2.8,
+              bodyBob: Math.sin(t * 3.2) * 0.8,
+              armSwing: Math.sin(t * 3.2) * 1.8,
+              legSwing: Math.sin(t * 3.2 + Math.PI) * 1.6,
+              mouthOpen: 0,
+              pulse: (Math.sin(t * 3.2) + 1) / 2,
+            };
+          }
+
           return {
-            mode: 'talk',
-            stageText: '對話回覆模式',
-            horizontalShift: 0,
-            bodyBob: Math.sin(t * 0.35) * 0.6,
-            armSwing: 1 + Math.sin(t) * 1.2,
+            mode: 'idle',
+            stageText: '待命中',
+            horizontalShift: Math.sin(phase * 0.35) * 0.6,
+            bodyBob: Math.sin(t * 0.9) * 0.25,
+            armSwing: Math.sin(t * 0.6) * 0.35,
             legSwing: 0,
-            mouthOpen: (Math.sin(t) + 1) * 0.9,
-            pulse: (Math.sin(t * 0.8) + 1) / 2,
+            mouthOpen: 0,
+            pulse: (Math.sin(t * 0.5) + 1) / 2,
           };
-        }
-
-        const t = (phase - 12) * 2.1;
-        return {
-          mode: 'think',
-          stageText: '思考規劃模式',
-          horizontalShift: Math.sin(t * 0.45) * 1.5,
-          bodyBob: Math.sin(t * 0.6) * 0.5,
-          armSwing: -1,
-          legSwing: 0,
-          mouthOpen: 0,
-          pulse: (Math.sin(t) + 1) / 2,
         };
+
+        return buildState(animationMode, seconds);
       };
       motionToggle.addEventListener('click', () => {
         runningMotion = !runningMotion;
@@ -1332,6 +1376,39 @@
         `;
       };
 
+      const setAnimationMode = (nextMode, durationMs = 0) => {
+        animationMode = nextMode;
+        animationModeOverrideUntil = durationMs > 0 ? Date.now() + durationMs : 0;
+      };
+
+      const syncAnimationWithControlState = (controlState) => {
+        if (Date.now() < animationModeOverrideUntil) return;
+        if (!controlApiConnected) {
+          setAnimationMode('sleep');
+          return;
+        }
+
+        const assistant = controlState?.assistant_status;
+        const execution = controlState?.execution_status;
+
+        if (assistant === 'Paused') {
+          setAnimationMode('paused');
+          return;
+        }
+
+        if (assistant === 'Running' || execution === 'running') {
+          setAnimationMode('running');
+          return;
+        }
+
+        if (execution === 'stopped') {
+          setAnimationMode('stopped');
+          return;
+        }
+
+        setAnimationMode('idle');
+      };
+
       const applyControlState = (data) => {
         reconcileTaskElapsed(data.state);
         assistantStatus.textContent = data.assistant_status;
@@ -1343,6 +1420,7 @@
         pauseBtn.disabled = !data.can.pause;
         resumeBtn.disabled = !data.can.resume;
         stopBtn.disabled = !data.can.stop;
+        syncAnimationWithControlState(data);
         renderFlow(data);
       };
 
@@ -1359,7 +1437,30 @@
           target.textContent = item.enabled ? '目前：啟用' : '目前：停用';
           target.style.color = item.enabled ? '#67e8f9' : '#fda4af';
           const button = document.querySelector(`[data-channel-toggle="${key}"]`);
-          if (button) button.textContent = item.enabled ? '關閉' : '開啟';
+          if (button) {
+            button.dataset.enabled = item.enabled ? 'true' : 'false';
+            button.textContent = item.enabled ? '關閉' : '開啟';
+            button.disabled = false;
+          }
+        });
+      };
+
+      const renderChannelsDisconnected = (message = 'Gateway 通道 API 未連接') => {
+        const mapping = {
+          telegram: channelStateTelegram,
+          line: channelStateLine,
+          web_ui: channelStateWebUi,
+        };
+
+        Object.values(mapping).forEach((target) => {
+          target.textContent = `未連接（${message}）`;
+          target.style.color = '#fda4af';
+        });
+
+        channelToggleButtons.forEach((buttonEl) => {
+          buttonEl.textContent = '重試';
+          buttonEl.disabled = false;
+          delete buttonEl.dataset.enabled;
         });
       };
 
@@ -1369,6 +1470,7 @@
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || '讀取接口狀態失敗');
         }
+        channelsApiConnected = true;
         renderChannels(payload.data);
       };
 
@@ -1382,6 +1484,7 @@
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || '切換接口失敗');
         }
+        channelsApiConnected = true;
         renderChannels(payload.data);
       };
 
@@ -1391,6 +1494,7 @@
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || '讀取 Agent 狀態失敗');
         }
+        controlApiConnected = true;
         applyControlState(payload.data);
       };
 
@@ -1409,6 +1513,7 @@
       };
 
       const sendCommand = async (text) => {
+        setAnimationMode('think', 2200);
         const response = await fetch('/api/agent/command', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1418,6 +1523,7 @@
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || '發送指令失敗');
         }
+        setAnimationMode('talk', 2800);
         return payload.reply;
       };
 
@@ -1495,13 +1601,23 @@
       channelToggleButtons.forEach((buttonEl) => {
         buttonEl.addEventListener('click', async () => {
           const channel = buttonEl.dataset.channelToggle;
-          const currentLabel = buttonEl.textContent;
-          const nextEnabled = currentLabel === '開啟';
           buttonEl.disabled = true;
           try {
+            if (!channelsApiConnected) {
+              status.textContent = '重新嘗試連接通道狀態...';
+              await refreshChannels();
+              status.textContent = '通道狀態已連接。';
+              appendLog('[channel] 已重新連接通道狀態 API');
+              return;
+            }
+
+            const isEnabled = buttonEl.dataset.enabled === 'true';
+            const nextEnabled = !isEnabled;
             await toggleChannel(channel, nextEnabled);
             appendLog(`[channel] ${channel} 已${nextEnabled ? '開啟' : '關閉'}`);
           } catch (error) {
+            channelsApiConnected = false;
+            renderChannelsDisconnected('請按重試重新連線');
             status.textContent = `接口切換失敗：${error.message}`;
             appendLog(`[error] 接口切換失敗：${error.message}`);
           } finally {
@@ -1662,13 +1778,23 @@
       });
 
       Promise.all([refreshState(), refreshChannels()])
-        .then(() => appendLog('[system] 已連線 Gateway 控制 API'))
+        .then(() => {
+          controlApiConnected = true;
+          channelsApiConnected = true;
+          status.textContent = '已連線 Gateway 控制 API';
+          appendLog('[system] 已連線 Gateway 控制 API');
+        })
         .catch((error) => {
+          controlApiConnected = false;
+          channelsApiConnected = false;
+          setAnimationMode('sleep');
           status.textContent = `無法連線控制 API：${error.message}`;
           appendLog(`[error] 無法連線控制 API：${error.message}`);
+          renderChannelsDisconnected('初始連線失敗');
           renderFlow();
         });
 
+      renderChannelsDisconnected('尚未連線');
       renderFlow();
     </script>
   </body>

@@ -1,6 +1,7 @@
 param(
   [string]$EnvFile = ".env.gateway",
   [switch]$OpenUi,
+  [switch]$NoOpenUi,
   [string]$UiUrl = "http://localhost:8787/approval-ui"
 )
 
@@ -24,7 +25,9 @@ if (Test-Path $ResolvedEnvFile) {
   Write-Warning "[start_gateway] Env file not found: $ResolvedEnvFile (continuing with current process env)"
 }
 
-if ($OpenUi) {
+$ShouldOpenUi = $OpenUi -or (-not $NoOpenUi)
+
+if ($ShouldOpenUi) {
   Start-Process $UiUrl
   Write-Host "[start_gateway] Opened UI: $UiUrl"
 }
