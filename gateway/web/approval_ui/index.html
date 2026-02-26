@@ -476,6 +476,62 @@
         letter-spacing: 0.02em;
       }
 
+
+      .task-toolbar {
+        margin-bottom: 0.55rem;
+        display: flex;
+        gap: 0.45rem;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .task-toolbar select {
+        border: 1px solid rgba(125, 211, 252, 0.45);
+        background: rgba(15, 23, 42, 0.82);
+        color: #bae6fd;
+        border-radius: 8px;
+        padding: 0.3rem 0.45rem;
+        font-size: 0.72rem;
+      }
+
+      .task-list {
+        display: grid;
+        gap: 0.42rem;
+        max-height: 220px;
+        overflow: auto;
+      }
+
+      .task-item {
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.62);
+        padding: 0.45rem;
+        display: grid;
+        gap: 0.35rem;
+      }
+
+      .task-item-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.45rem;
+        align-items: center;
+      }
+
+      .task-name { font-size: 0.78rem; font-weight: 700; color: #e2e8f0; }
+      .task-meta { font-size: 0.7rem; color: #94a3b8; }
+      .task-actions { display:flex; gap:0.35rem; flex-wrap:wrap; }
+      .task-btn {
+        border: 1px solid rgba(125, 211, 252, 0.45);
+        background: rgba(15, 23, 42, 0.8);
+        color: #bae6fd;
+        border-radius: 8px;
+        padding: 0.24rem 0.45rem;
+        font-size: 0.68rem;
+        cursor: pointer;
+      }
+      .task-btn.delete { border-color: rgba(251, 113, 133, 0.55); color: #fecdd3; }
+      .task-empty { font-size: 0.74rem; color: #94a3b8; }
+
       .flow-help {
         margin: 0 0 0.55rem;
         font-size: 0.73rem;
@@ -674,6 +730,26 @@
               </div>
             </article>
 
+
+
+            <article class="flow-card" aria-label="任務列表" data-collapsible data-collapsible-label="任務列表（排序/刪除）">
+              <h3>任務列表（可排序 / 刪除）</h3>
+              <p class="flow-help">可依建立時間、更新時間、優先級排序；僅允許刪除終態任務（succeeded / failed / cancelled）。</p>
+              <div class="task-toolbar">
+                <label for="taskSort">排序：</label>
+                <select id="taskSort">
+                  <option value="created_desc">建立時間（新→舊）</option>
+                  <option value="created_asc">建立時間（舊→新）</option>
+                  <option value="updated_desc">更新時間（新→舊）</option>
+                  <option value="priority_desc">優先級（高→低）</option>
+                </select>
+                <button id="refreshTasks" class="ctrl-btn" type="button">重新整理任務</button>
+              </div>
+              <div id="taskList" class="task-list">
+                <div class="task-empty">尚未載入任務。</div>
+              </div>
+            </article>
+
             <article class="flow-card" aria-label="API 資料流" data-collapsible data-collapsible-label="API 資料流拓樸">
               <h3>API 資料流拓樸（卡片式）</h3>
               <p class="flow-help">以方塊卡片呈現目前元件（UI / Gateway / AnythingLLM / Ollama / gpt-oss:20b），連線旁標示通訊方式（API / Local Runtime）。<span class="flow-hint">可直接拖曳卡片調整拓樸。</span></p>
@@ -724,6 +800,9 @@
       const channelStateLine = document.getElementById('channelStateLine');
       const channelStateWebUi = document.getElementById('channelStateWebUi');
       const channelToggleButtons = document.querySelectorAll('[data-channel-toggle]');
+      const taskList = document.getElementById('taskList');
+      const taskSort = document.getElementById('taskSort');
+      const refreshTasksBtn = document.getElementById('refreshTasks');
       const flowSvg = document.getElementById('flowSvg');
       const motionToggle = document.getElementById('motionToggle');
       const pauseAndClearStageBtn = document.getElementById('pauseAndClearStage');
@@ -869,6 +948,7 @@
       let flowDragState = null;
       let controlApiConnected = false;
       let channelsApiConnected = false;
+      let cachedTasks = [];
       let animationModeOverrideUntil = 0;
       let animationMode = 'sleep';
       let spriteGender = 'female';
@@ -1342,8 +1422,8 @@
         flowLastControlState = controlState;
 
         const nodeMap = new Map(flowNodes.map((node) => [node.id, node]));
-        const isActive = controlState?.assistant_status === 'Running';
-        const isPaused = controlState?.assistant_status === 'Paused';
+        const isActive = controlState?.state === 'running';
+        const isPaused = controlState?.state === 'paused';
 
         const edgeColor = isActive ? '#22d3ee' : (isPaused ? '#f59e0b' : '#64748b');
 
@@ -1417,25 +1497,31 @@
           return;
         }
 
-        const assistant = controlState?.assistant_status;
-        const execution = controlState?.execution_status;
+        const runState = controlState?.state;
 
-        if (assistant === 'Paused') {
+        if (runState === 'paused') {
           setAnimationMode('paused');
           return;
         }
 
-        if (assistant === 'Running' || execution === 'running') {
+        if (runState === 'running') {
           setAnimationMode('running');
           return;
         }
 
-        if (execution === 'stopped') {
+        if (runState === 'stopped') {
           setAnimationMode('stopped');
           return;
         }
 
         setAnimationMode('idle');
+      };
+
+      const setControlButtons = ({ start, pause, resume, stop }) => {
+        button.disabled = !start;
+        pauseBtn.disabled = !pause;
+        resumeBtn.disabled = !resume;
+        stopBtn.disabled = !stop;
       };
 
       const applyControlState = (data) => {
@@ -1445,10 +1531,12 @@
         taskProgress.textContent = `${data.task_progress}%`;
         lastUpdated.textContent = toLocalTime(data.last_updated_at);
 
-        button.disabled = !data.can.start;
-        pauseBtn.disabled = !data.can.pause;
-        resumeBtn.disabled = !data.can.resume;
-        stopBtn.disabled = !data.can.stop;
+        setControlButtons({
+          start: Boolean(data.can?.start),
+          pause: Boolean(data.can?.pause),
+          resume: Boolean(data.can?.resume),
+          stop: Boolean(data.can?.stop),
+        });
         syncAnimationWithControlState(data);
         renderFlow(data);
       };
@@ -1464,9 +1552,10 @@
           const item = channels[key];
           if (!item) return;
           const enabledText = item.enabled ? '目前：啟用' : '目前：停用';
-          const connectionText = item.enabled ? '已連接' : '已停用';
-          target.textContent = `${enabledText}｜狀態：${connectionText}`;
-          target.style.color = item.enabled ? '#67e8f9' : '#fda4af';
+          const connectionText = item.connected ? '已連接（有實際流量）' : '未連接（尚無流量）';
+          const lastActivityText = item.last_activity_at ? `最後活動：${toLocalTime(item.last_activity_at)}` : '最後活動：--';
+          target.textContent = `${enabledText}｜狀態：${connectionText}｜${lastActivityText}`;
+          target.style.color = item.enabled ? (item.connected ? '#67e8f9' : '#fde68a') : '#fda4af';
           const button = document.querySelector(`[data-channel-toggle="${key}"]`);
           if (button) {
             button.dataset.enabled = item.enabled ? 'true' : 'false';
@@ -1493,6 +1582,66 @@
           buttonEl.disabled = false;
           delete buttonEl.dataset.enabled;
         });
+      };
+
+      const taskStatusPriority = {
+        running: 6,
+        pending: 5,
+        retry_scheduled: 4,
+        failed: 3,
+        cancelled: 2,
+        succeeded: 1,
+      };
+
+      const sortTasks = (tasks, sortKey) => {
+        const list = [...tasks];
+        if (sortKey === 'created_asc') return list.sort((a, b) => a.created_at.localeCompare(b.created_at));
+        if (sortKey === 'updated_desc') return list.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+        if (sortKey === 'priority_desc') return list.sort((a, b) => (b.priority - a.priority) || ((taskStatusPriority[b.status] || 0) - (taskStatusPriority[a.status] || 0)));
+        return list.sort((a, b) => b.created_at.localeCompare(a.created_at));
+      };
+
+      const renderTaskList = (tasks) => {
+        if (!taskList) return;
+        if (!tasks.length) {
+          taskList.innerHTML = '<div class="task-empty">目前沒有任務。</div>';
+          return;
+        }
+
+        taskList.innerHTML = tasks.map((task) => {
+          const canDelete = ['succeeded', 'failed', 'cancelled'].includes(task.status);
+          return `
+            <article class="task-item">
+              <div class="task-item-head">
+                <span class="task-name">${task.name}</span>
+                <span class="task-meta">${task.status}</span>
+              </div>
+              <div class="task-meta">id: ${task.id}</div>
+              <div class="task-meta">priority: ${task.priority}｜建立：${toLocalTime(task.created_at)}｜更新：${toLocalTime(task.updated_at)}</div>
+              <div class="task-actions">
+                <button class="task-btn delete" data-task-delete="${task.id}" type="button" ${canDelete ? '' : 'disabled'}>刪除</button>
+              </div>
+            </article>
+          `;
+        }).join('');
+      };
+
+      const refreshTasks = async () => {
+        const response = await fetch('/api/tasks');
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || '讀取任務列表失敗');
+        }
+        cachedTasks = Array.isArray(payload.data) ? payload.data : [];
+        renderTaskList(sortTasks(cachedTasks, taskSort?.value || 'created_desc'));
+      };
+
+      const deleteTaskById = async (taskId) => {
+        const response = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || '刪除任務失敗');
+        }
       };
 
       const refreshChannels = async () => {
@@ -1657,6 +1806,43 @@
         });
       });
 
+      if (taskSort) {
+        taskSort.addEventListener('change', () => {
+          renderTaskList(sortTasks(cachedTasks, taskSort.value));
+        });
+      }
+
+      if (refreshTasksBtn) {
+        refreshTasksBtn.addEventListener('click', async () => {
+          try {
+            await refreshTasks();
+            appendLog('[task] 任務列表已更新');
+          } catch (error) {
+            status.textContent = `任務列表更新失敗：${error.message}`;
+            appendLog(`[error] 任務列表更新失敗：${error.message}`);
+          }
+        });
+      }
+
+      if (taskList) {
+        taskList.addEventListener('click', async (event) => {
+          const target = event.target;
+          if (!(target instanceof HTMLElement)) return;
+          const taskId = target.dataset.taskDelete;
+          if (!taskId) return;
+          target.setAttribute('disabled', 'true');
+          try {
+            await deleteTaskById(taskId);
+            appendLog(`[task] 已刪除任務 ${taskId}`);
+            await refreshTasks();
+          } catch (error) {
+            status.textContent = `刪除任務失敗：${error.message}`;
+            appendLog(`[error] 刪除任務失敗：${error.message}`);
+            target.removeAttribute('disabled');
+          }
+        });
+      }
+
       clearConsoleBtn.addEventListener('click', () => {
         [consoleLog, consoleLogLandscape].forEach((targetLog) => {
           targetLog.textContent = '[system] console 已清空';
@@ -1808,7 +1994,7 @@
         },
       });
 
-      Promise.all([refreshState(), refreshChannels()])
+      Promise.all([refreshState(), refreshChannels(), refreshTasks()])
         .then(() => {
           controlApiConnected = true;
           channelsApiConnected = true;
@@ -1818,6 +2004,7 @@
         .catch((error) => {
           controlApiConnected = false;
           channelsApiConnected = false;
+          setControlButtons({ start: false, pause: false, resume: false, stop: false });
           setAnimationMode('sleep');
           status.textContent = `無法連線控制 API：${error.message}`;
           appendLog(`[error] 無法連線控制 API：${error.message}`);

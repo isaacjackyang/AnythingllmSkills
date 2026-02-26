@@ -8,7 +8,7 @@ import { getLifecycleSnapshot, parseHeartbeatInterval, startHeartbeat, updateSou
 import { routeEvent } from "./core/router";
 import { applyAgentControl, getAgentControlSnapshot } from "./core/agent_control";
 import { createEvent } from "./core/event";
-import { getChannelSnapshot, isChannelEnabled, setChannelEnabled } from "./core/channel_control";
+import { getChannelSnapshot, isChannelEnabled, markChannelActivity, setChannelEnabled } from "./core/channel_control";
 import { cancelTask, deleteTask, getTaskById, listTasks } from "./core/tasks/store";
 import { runQueuedJobsOnce, startJobRunner } from "./workers/job_runner";
 
@@ -173,6 +173,8 @@ const server = createServer(async (req, res) => {
       const text = String(payload.text ?? "").trim();
       if (!text) throw new Error("text is required");
 
+      markChannelActivity("web_ui");
+
       const event = createEvent({
         channel: "web_ui",
         sender: {
@@ -258,6 +260,8 @@ const server = createServer(async (req, res) => {
       }
 
       const raw = await readBody(req);
+      markChannelActivity("telegram");
+
       const event = connector.toEvent(JSON.parse(raw));
       const result = await routeEvent(event, brain);
       await sendReplyByChannel(event, result.reply);
@@ -290,6 +294,8 @@ const server = createServer(async (req, res) => {
         res.end(JSON.stringify({ ok: false, error: "invalid line signature" }));
         return;
       }
+
+      markChannelActivity("line");
 
       const event = lineConnector.toEvent(JSON.parse(raw));
       const result = await routeEvent(event, brain);
