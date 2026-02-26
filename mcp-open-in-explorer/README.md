@@ -150,6 +150,8 @@ cd mcp-open-in-explorer
 常用參數：
 - `-SkipInstall`：跳過 `npm install`
 - `-SkipBuild`：跳過 `npm run build`
+- `-HealthCheck`：不常駐啟動，改為短時間啟動 MCP 並檢查程序是否穩定存活
+- `-HealthCheckTimeoutSeconds <秒數>`：健康檢查時要觀察的秒數（預設 8，最小 3）
 - `-NoPause`：結束時不等待按鍵
 
 ---
@@ -180,6 +182,8 @@ cd mcp-open-in-explorer
 - `-SkipBuild`：跳過 `npm run build`
 - `-BuildExe`：執行 `npm run package:win-x64`
 - `-ExeOutputDir <path>`：把 exe 額外複製到指定路徑
+- `-RunStartHealthCheck`：bootstrap 完成後，會接著執行 `start_open_in_explorer.ps1` 的健康檢查流程
+- `-StartHealthCheckTimeoutSeconds <秒數>`：bootstrap 觸發 start 健康檢查時的觀察秒數（預設 8）
 - `-NoPause`：結束時不等待按鍵
 
 > 建議流程：先在開發機 `-BuildExe`，再把 `mcp-open-in-explorer-win-x64.exe` 帶到目標 Windows x64 主機執行。

@@ -4,6 +4,8 @@ param(
   [switch]$SkipBuild,
   [switch]$BuildExe,
   [string]$ExeOutputDir = "",
+  [switch]$RunStartHealthCheck,
+  [int]$StartHealthCheckTimeoutSeconds = 8,
   [switch]$NoPause
 )
 
@@ -25,6 +27,34 @@ function Run-Command([string]$Command, [string[]]$Arguments) {
   if ($LASTEXITCODE -ne 0) {
     throw "[bootstrap-open-in-explorer][error] Command failed ($LASTEXITCODE): $Command $($Arguments -join ' ')"
   }
+}
+
+
+function Invoke-StartScriptHealthCheck([string]$AllowRootValue, [int]$TimeoutSeconds) {
+  $startScript = Join-Path $ScriptDirectory "start_open_in_explorer.ps1"
+  if (-not (Test-Path $startScript)) {
+    throw "[bootstrap-open-in-explorer][error] Missing start script: $startScript"
+  }
+
+  Log "Running start script health check..."
+
+  $arguments = @(
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    $startScript,
+    "-AllowRoots",
+    $AllowRootValue,
+    "-SkipInstall",
+    "-SkipBuild",
+    "-HealthCheck",
+    "-HealthCheckTimeoutSeconds",
+    $TimeoutSeconds.ToString(),
+    "-NoPause"
+  )
+
+  Run-Command "powershell" $arguments
 }
 
 function Wait-ForExit {
@@ -94,6 +124,10 @@ try {
     }
 
     Log "EXE ready: $exePath"
+  }
+
+  if ($RunStartHealthCheck) {
+    Invoke-StartScriptHealthCheck -AllowRootValue $AllowRoots -TimeoutSeconds $StartHealthCheckTimeoutSeconds
   }
 
   Log "Bootstrap completed."
