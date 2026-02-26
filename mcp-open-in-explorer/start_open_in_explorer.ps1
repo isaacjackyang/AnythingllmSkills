@@ -2,6 +2,8 @@ param(
   [string[]]$AllowRoots = @("C:\agent_sandbox"),
   [switch]$SkipInstall,
   [switch]$SkipBuild,
+  [switch]$HealthCheck,
+  [int]$HealthCheckTimeoutSeconds = 8,
   [switch]$NoPause
 )
 
@@ -22,6 +24,56 @@ function Run-Command([string]$Command, [string[]]$Arguments) {
   & $Command @Arguments
   if ($LASTEXITCODE -ne 0) {
     throw "[open-in-explorer][error] Command failed ($LASTEXITCODE): $Command $($Arguments -join ' ')"
+  }
+}
+
+function Invoke-HealthCheck([string[]]$Roots, [int]$TimeoutSeconds) {
+  if ($TimeoutSeconds -lt 3) {
+    throw "[open-in-explorer][error] HealthCheckTimeoutSeconds must be >= 3."
+  }
+
+  $stdoutLog = [System.IO.Path]::GetTempFileName()
+  $stderrLog = [System.IO.Path]::GetTempFileName()
+
+  try {
+    $process = Start-Process -FilePath "node" -ArgumentList (@("dist/index.js") + $Roots) -PassThru -NoNewWindow -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
+
+    Start-Sleep -Seconds 3
+
+    if ($process.HasExited) {
+      $stderr = ""
+      if (Test-Path $stderrLog) {
+        $stderr = (Get-Content -Raw -Path $stderrLog).Trim()
+      }
+
+      if ([string]::IsNullOrWhiteSpace($stderr)) {
+        throw "[open-in-explorer][error] Health check failed: process exited early with code $($process.ExitCode)."
+      }
+
+      throw "[open-in-explorer][error] Health check failed: process exited early with code $($process.ExitCode). stderr: $stderr"
+    }
+
+    Start-Sleep -Seconds ($TimeoutSeconds - 3)
+
+    if ($process.HasExited) {
+      throw "[open-in-explorer][error] Health check failed: process exited before timeout with code $($process.ExitCode)."
+    }
+
+    Log "Health check passed. Process stayed alive for $TimeoutSeconds seconds."
+  }
+  finally {
+    if ($process -and -not $process.HasExited) {
+      Stop-Process -Id $process.Id -Force
+      Wait-Process -Id $process.Id
+    }
+
+    if (Test-Path $stdoutLog) {
+      Remove-Item -Path $stdoutLog -Force -ErrorAction SilentlyContinue
+    }
+
+    if (Test-Path $stderrLog) {
+      Remove-Item -Path $stderrLog -Force -ErrorAction SilentlyContinue
+    }
   }
 }
 
@@ -85,9 +137,13 @@ try {
   }
 
   Log "Allow roots: $($resolvedRoots -join '; ')"
-  Log "Starting MCP server..."
-
-  Run-Command "node" (@("dist/index.js") + $resolvedRoots)
+  if ($HealthCheck) {
+    Log "Running MCP server health check..."
+    Invoke-HealthCheck -Roots $resolvedRoots -TimeoutSeconds $HealthCheckTimeoutSeconds
+  } else {
+    Log "Starting MCP server..."
+    Run-Command "node" (@("dist/index.js") + $resolvedRoots)
+  }
 }
 finally {
   Wait-ForExit
