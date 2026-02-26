@@ -261,6 +261,39 @@ node C:\agent_sandbox\mcp-open-in-explorer\dist\index.js C:\agent_sandbox
 
 ---
 
+## 8) 常見錯誤排查（AnythingLLM 顯示 Connection closed）
+
+如果 AnythingLLM 顯示：
+
+- `MCP error -32000: Connection closed`
+- `This MCP server is not running`
+
+最常見原因是 **MCP 主程式不是在 Windows 平台啟動**。
+
+`open-in-explorer` 啟動時會先檢查 `process.platform === "win32"`；若不是，就會直接退出。
+
+### 你目前這組設定的檢查重點
+
+```text
+Command: node
+Arguments: C:\agent_sandbox\mcp-open-in-explorer\dist\index.js C:\agent_sandbox
+```
+
+1. `dist/index.js` 是否真的存在（先在該機器執行過 `npm run build`）
+2. AnythingLLM 是否跑在 Windows 原生環境（不是 Linux container / WSL）
+3. `node` 是否可被 AnythingLLM 啟動程序找到（PATH 內可執行）
+
+### 建議快速驗證（在同一台主機）
+
+```powershell
+node C:\agent_sandbox\mcp-open-in-explorer\dist\index.js C:\agent_sandbox
+```
+
+- 若看到 `open-in-explorer MCP server ready...`，代表服務可正常啟動。
+- 若看到 `Windows-only` 相關錯誤，代表啟動環境不是 Windows。 
+
+---
+
 ## 8) 打包成 exe（可選）
 
 ```powershell
