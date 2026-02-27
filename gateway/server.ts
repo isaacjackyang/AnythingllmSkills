@@ -1,9 +1,12 @@
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { LineConnector } from "./connectors/line/connector";
 import { TelegramConnector } from "./connectors/telegram/connector";
 import { AnythingLlmClient } from "./core/anythingllm_client";
+import { OllamaClient } from "./core/ollama_client";
 import { getLifecycleSnapshot, parseHeartbeatInterval, startHeartbeat, updateSoul } from "./core/lifecycle";
 import { routeEvent } from "./core/router";
 import { applyAgentControl, getAgentControlSnapshot } from "./core/agent_control";
@@ -21,7 +24,12 @@ const anythingBaseUrl = process.env.ANYTHINGLLM_BASE_URL ?? "http://localhost:30
 const anythingApiKey = process.env.ANYTHINGLLM_API_KEY ?? "";
 const workspace = process.env.DEFAULT_WORKSPACE ?? "maiecho-prod";
 const agent = process.env.DEFAULT_AGENT ?? "ops-agent";
+const ollamaBaseUrl = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
+const ollamaModel = process.env.OLLAMA_MODEL ?? "gpt-oss:20b";
+const ollamaTimeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS ?? 12000);
 const heartbeatIntervalMs = parseHeartbeatInterval(process.env.HEARTBEAT_INTERVAL_MS, 10_000);
+const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES ?? 1024 * 1024);
+const MAX_MEMORY_FILE_READ_BYTES = Number(process.env.MAX_MEMORY_FILE_READ_BYTES ?? 256 * 1024);
 
 if (!telegramToken) console.warn("TELEGRAM_BOT_TOKEN is empty: telegram sendReply will fail");
 if (!lineChannelAccessToken) console.warn("LINE_CHANNEL_ACCESS_TOKEN is empty: line sendReply will fail");
@@ -49,8 +57,21 @@ const brain = new AnythingLlmClient({
   apiKey: anythingApiKey,
 });
 
+const ollama = new OllamaClient({
+  baseUrl: ollamaBaseUrl,
+  model: ollamaModel,
+  timeoutMs: ollamaTimeoutMs,
+});
+
 
 const approvalUiPath = path.resolve(process.cwd(), "gateway/web/approval_ui/index.html");
+const memoryBrowseRoots = [
+  path.resolve(process.cwd(), "memory"),
+  path.resolve(process.cwd(), "second-brain"),
+];
+const memoryRootFile = path.resolve(process.cwd(), "MEMORY.md");
+const execFileAsync = promisify(execFile);
+const workflowScriptPath = path.resolve(process.cwd(), "scripts/memory_workflow.js");
 
 const server = createServer(async (req, res) => {
   if (req.method === "GET" && req.url === "/approval-ui") {
@@ -93,6 +114,124 @@ const server = createServer(async (req, res) => {
     }
   }
 
+
+
+  if (req.method === "GET" && req.url === "/api/inference/routes") {
+    const ollamaHealth = await getOllamaRouteHealth(ollamaBaseUrl);
+    res.statusCode = 200;
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({
+      ok: true,
+      data: {
+        default_path: "anythingllm",
+        routes: {
+          anythingllm: {
+            enabled: Boolean(anythingApiKey),
+            model: null,
+            reason: anythingApiKey ? null : "ANYTHINGLLM_API_KEY is empty",
+          },
+          ollama: {
+            enabled: ollamaHealth.enabled,
+            model: ollamaModel,
+            reason: ollamaHealth.reason,
+          },
+        },
+      },
+    }));
+    return;
+  }
+
+
+  if (req.method === "GET" && req.url === "/api/memory/files") {
+    try {
+      const files = await listMemoryFiles();
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true, data: files }));
+      return;
+    } catch (error) {
+      res.statusCode = 500;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: "讀取記憶檔案清單失敗" }));
+      return;
+    }
+  }
+
+  if (req.method === "GET" && req.url?.startsWith("/api/memory/file")) {
+    try {
+      const requestUrl = new URL(req.url ?? "/", "http://localhost");
+      const target = String(requestUrl.searchParams.get("path") ?? "").trim();
+      if (!target) throw new Error("path is required");
+      const resolvedPath = resolveMemoryPath(target);
+      const content = await readFile(resolvedPath, "utf8");
+      const truncated = content.length > MAX_MEMORY_FILE_READ_BYTES;
+      const safeContent = truncated ? content.slice(0, MAX_MEMORY_FILE_READ_BYTES) : content;
+
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({
+        ok: true,
+        data: {
+          path: toRepoRelativePath(resolvedPath),
+          content: safeContent,
+          truncated,
+        },
+      }));
+      return;
+    } catch (error) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: sanitizePublicError(error, "讀取記憶檔案失敗") }));
+      return;
+    }
+  }
+
+
+  if (req.method === "POST" && req.url === "/api/memory/workflows/run") {
+    try {
+      const raw = await readBody(req);
+      const payload = raw ? JSON.parse(raw) : {};
+      const job = String(payload.job ?? "").trim();
+      const date = String(payload.date ?? "").trim();
+      const dryRun = Boolean(payload.dryRun);
+      if (!["microsync", "daily-wrapup", "weekly-compound"].includes(job)) {
+        throw new Error("invalid workflow job");
+      }
+
+      const args = [workflowScriptPath, "run", job];
+      if (date) args.push("--date", date);
+      if (dryRun) args.push("--dry-run");
+
+      const { stdout } = await execFileAsync(process.execPath, args, { cwd: process.cwd(), timeout: 20_000, maxBuffer: 1024 * 1024 });
+      const parsed = stdout ? JSON.parse(stdout) : { ok: false, error: "empty workflow output" };
+      if (!parsed.ok) {
+        throw new Error(parsed.error || "workflow execution failed");
+      }
+
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true, data: parsed.data }));
+      return;
+    } catch (error) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: sanitizePublicError(error, "固定工作流程執行失敗") }));
+      return;
+    }
+  }
+
+  if (req.method === "GET" && req.url === "/api/memory/workflows") {
+    res.statusCode = 200;
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({
+      ok: true,
+      data: {
+        jobs: ["microsync", "daily-wrapup", "weekly-compound"],
+        script: toRepoRelativePath(workflowScriptPath),
+      },
+    }));
+    return;
+  }
 
   if (req.method === "GET" && req.url === "/api/channels") {
     res.statusCode = 200;
@@ -171,7 +310,9 @@ const server = createServer(async (req, res) => {
       const raw = await readBody(req);
       const payload = raw ? JSON.parse(raw) : {};
       const text = String(payload.text ?? "").trim();
+      const path = String(payload.path ?? "anythingllm").trim();
       if (!text) throw new Error("text is required");
+      if (!["anythingllm", "ollama"].includes(path)) throw new Error("path must be anythingllm or ollama");
 
       markChannelActivity("web_ui");
 
@@ -193,17 +334,24 @@ const server = createServer(async (req, res) => {
         },
       });
 
-      const result = await routeEvent(event, brain);
-      await sendReplyByChannel(event, result.reply);
+      let reply = "";
+      if (path === "ollama") {
+        reply = await ollama.generate(text);
+      } else {
+        const result = await routeEvent(event, brain);
+        reply = result.reply;
+      }
+      await sendReplyByChannel(event, reply);
 
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ ok: true, trace_id: event.trace_id, reply: result.reply }));
+      res.end(JSON.stringify({ ok: true, trace_id: event.trace_id, reply, path, model: path === "ollama" ? ollamaModel : undefined }));
       return;
     } catch (error) {
+      console.error("/api/agent/command failed", error);
       res.statusCode = 400;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ ok: false, error: (error as Error).message }));
+      res.end(JSON.stringify({ ok: false, error: sanitizePublicError(error, "指令執行失敗，請檢查路徑設定或服務狀態") }));
       return;
     }
   }
@@ -386,8 +534,108 @@ async function sendReplyByChannel(event: import("./core/event").Event, reply: st
 function readBody(req: import("node:http").IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    let totalBytes = 0;
+
+    req.on("data", (chunk) => {
+      const data = Buffer.from(chunk);
+      totalBytes += data.byteLength;
+      if (totalBytes > MAX_BODY_BYTES) {
+        reject(new Error(`request body too large (max ${MAX_BODY_BYTES} bytes)`));
+        req.destroy();
+        return;
+      }
+      chunks.push(data);
+    });
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
+}
+
+
+async function getOllamaRouteHealth(baseUrl: string): Promise<{ enabled: boolean; reason: string | null }> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/tags`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 1500);
+
+  try {
+    const response = await fetch(url, { method: "GET", signal: controller.signal });
+    if (!response.ok) {
+      return { enabled: false, reason: `Ollama health check failed (${response.status})` };
+    }
+    return { enabled: true, reason: null };
+  } catch (error) {
+    const message = (error as Error).message || "unknown error";
+    return { enabled: false, reason: `Ollama unreachable: ${message}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+
+function sanitizePublicError(error: unknown, fallbackMessage: string): string {
+  const message = (error as Error)?.message ?? fallbackMessage;
+  if (/text is required|path must be anythingllm or ollama|request body too large|path is required|unsupported memory path|file not found|invalid workflow job|job locked/i.test(message)) {
+    return message;
+  }
+  return fallbackMessage;
+}
+
+
+async function listMemoryFiles(): Promise<Array<{ path: string; size: number; updated_at: string }>> {
+  const files: Array<{ path: string; size: number; updated_at: string }> = [];
+
+  try {
+    const rootStat = await stat(memoryRootFile);
+    if (rootStat.isFile()) {
+      files.push({ path: toRepoRelativePath(memoryRootFile), size: rootStat.size, updated_at: rootStat.mtime.toISOString() });
+    }
+  } catch {
+    // ignore missing MEMORY.md
+  }
+
+  for (const root of memoryBrowseRoots) {
+    await walkMemoryDir(root, files);
+  }
+
+  return files.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+async function walkMemoryDir(dirPath: string, files: Array<{ path: string; size: number; updated_at: string }>): Promise<void> {
+  let entries: import("node:fs").Dirent[] = [];
+  try {
+    entries = await readdir(dirPath, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      await walkMemoryDir(fullPath, files);
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+
+    const fileStat = await stat(fullPath);
+    files.push({ path: toRepoRelativePath(fullPath), size: fileStat.size, updated_at: fileStat.mtime.toISOString() });
+  }
+}
+
+function resolveMemoryPath(relativePath: string): string {
+  const normalized = relativePath.replace(/^\/+/, "");
+  const fullPath = path.resolve(process.cwd(), normalized);
+
+  const inRootFile = fullPath === memoryRootFile;
+  const inMemoryRoots = memoryBrowseRoots.some((root) => fullPath === root || fullPath.startsWith(`${root}${path.sep}`));
+  if (!inRootFile && !inMemoryRoots) {
+    throw new Error("unsupported memory path");
+  }
+  if (!fullPath.endsWith(".md") && fullPath !== memoryRootFile) {
+    throw new Error("unsupported memory path");
+  }
+  return fullPath;
+}
+
+function toRepoRelativePath(fullPath: string): string {
+  return path.relative(process.cwd(), fullPath).replace(/\\/g, "/");
 }

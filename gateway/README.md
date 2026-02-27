@@ -108,13 +108,21 @@ Invoke-RestMethod http://localhost:8787/api/channels
 
 ### 控制面
 - `GET /api/agent/control`
+- `GET /api/inference/routes`（回傳 anythingllm/ollama 路徑可用性與模型資訊，並同步回報 Ollama 可達性檢查結果）
 - `POST /api/agent/control`（`start|pause|resume|stop`）
 - `GET /api/channels`
+- `GET /api/memory/files`（列出可檢視的記憶 Markdown 檔案）
+- `GET /api/memory/file?path=...`（讀取指定記憶檔內容）
+- `GET /api/memory/workflows`（列出可執行固定流程）
+- `POST /api/memory/workflows/run`（執行固定流程：microsync / daily-wrapup / weekly-compound）
 - `POST /api/channels`（channel: `telegram|line|web_ui` + `enabled: boolean`）
 
 ### Web command
 - `POST /api/agent/command`
+  - `text: string`（必填）
+  - `path: "anythingllm" | "ollama"`（選填，預設 `anythingllm`）
   - 若 `web_ui` channel disabled，回 `503`。
+  - 當 `path="ollama"` 時，直接呼叫 Ollama `/api/generate`（可用 `OLLAMA_BASE_URL`、`OLLAMA_MODEL` 設定）。
 
 ### Ingress
 - `POST /ingress/telegram`
@@ -167,6 +175,21 @@ Invoke-RestMethod http://localhost:8787/api/channels
 
 ---
 
-## 10. 一句總結
+## 10. 記憶固定流程自動化
+
+- 固定流程腳本：`scripts/memory_workflow.js`
+- UI 可直接觸發：`POST /api/memory/workflows/run`
+- 建議預設先用 dry-run，確認輸出後再正式執行。
+
+## 11. 資安檢視與建議
+
+- 安全檢視文件：`gateway/SECURITY_REVIEW.md`
+- 新增保護：
+  - `MAX_BODY_BYTES`（限制 request body，預設 1MiB）
+  - `OLLAMA_TIMEOUT_MS`（限制 Ollama 呼叫逾時，預設 12s）
+  - `MAX_MEMORY_FILE_READ_BYTES`（單次記憶檔讀取上限，預設 256KiB）
+  - `/api/inference/routes` 不再回傳 Ollama base URL
+
+## 12. 一句總結
 
 Gateway 的核心價值是把 AI 執行變成「可觀測、可控、可回放」的服務，不只是聊天 API 代理。

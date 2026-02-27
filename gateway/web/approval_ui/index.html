@@ -688,11 +688,16 @@
 
         <section class="stage-chat" aria-label="指令對話框" data-collapsible data-collapsible-label="Agent 對話輸入框">
           <h2 style="margin:0;font-size:0.92rem;">Agent 對話輸入框</h2>
-          <pre id="chatLog" class="chat-log">[chat] 可在此輸入指令，送至 Gateway -> AnythingLLM</pre>
+          <pre id="chatLog" class="chat-log">[chat] 可在此輸入指令，可選擇路徑：Gateway -> AnythingLLM 或 Gateway -> Ollama (gpt-oss)</pre>
           <form id="chatForm" class="chat-form">
+            <select id="chatPath" class="chat-input" style="max-width: 260px;">
+              <option value="anythingllm">經 AnythingLLM（預設）</option>
+              <option value="ollama">直連 Ollama（gpt-oss）</option>
+            </select>
             <input id="chatInput" class="chat-input" type="text" placeholder="例如：請整理今天告警並提出處置步驟" required />
             <button id="chatSend" class="chat-send" type="submit">送出</button>
           </form>
+          <p id="inferenceRouteStatus" style="margin:6px 0 0;color:#94a3b8;font-size:12px;">路徑檢查中...</p>
         </section>
       </section>
 
@@ -789,6 +794,36 @@
               </div>
             </article>
 
+            <article class="flow-card" aria-label="記憶檔案檢視" data-collapsible data-collapsible-label="記憶檔案檢視">
+              <h3>記憶檔案檢視</h3>
+              <p class="flow-help">可選擇並打開 `MEMORY.md`、`memory/`、`second-brain/` 下的 Markdown 記憶檔。</p>
+              <div class="task-toolbar">
+                <label for="memoryFileSelect">檔案：</label>
+                <select id="memoryFileSelect" style="min-width: 280px;"></select>
+                <button id="refreshMemoryFiles" class="ctrl-btn" type="button">重新整理記憶檔</button>
+                <button id="openMemoryFile" class="ctrl-btn" type="button">開啟檔案</button>
+              </div>
+              <pre id="memoryFileContent" class="console-log" style="min-height:160px;max-height:360px;">[memory] 尚未載入記憶檔內容</pre>
+            </article>
+
+            <article class="flow-card" aria-label="記憶固定流程" data-collapsible data-collapsible-label="記憶固定流程（自動化）">
+              <h3>記憶固定流程（自動化）</h3>
+              <p class="flow-help">固定流程可一鍵執行（microSync / daily wrap-up / weekly compound）；需要智力判斷的內容仍由模型或人工處理。</p>
+              <div class="task-toolbar">
+                <label for="workflowJobSelect">流程：</label>
+                <select id="workflowJobSelect">
+                  <option value="microsync">microSync</option>
+                  <option value="daily-wrapup">daily wrap-up</option>
+                  <option value="weekly-compound">weekly compound</option>
+                </select>
+                <label for="workflowDateInput">日期：</label>
+                <input id="workflowDateInput" type="date" />
+                <label><input id="workflowDryRun" type="checkbox" checked /> dry-run</label>
+                <button id="runWorkflowBtn" class="ctrl-btn" type="button">執行流程</button>
+              </div>
+              <pre id="workflowResult" class="console-log" style="min-height:120px;max-height:260px;">[workflow] 尚未執行</pre>
+            </article>
+
             <article class="flow-card" aria-label="API 資料流" data-collapsible data-collapsible-label="API 資料流拓樸">
               <h3>API 資料流拓樸（卡片式）</h3>
               <p class="flow-help">以方塊卡片呈現目前元件（UI / Gateway / AnythingLLM / Ollama / gpt-oss:20b），連線旁標示通訊方式（API / Local Runtime）。<span class="flow-hint">可直接拖曳卡片調整拓樸。</span></p>
@@ -842,12 +877,24 @@
       const taskList = document.getElementById('taskList');
       const taskSort = document.getElementById('taskSort');
       const refreshTasksBtn = document.getElementById('refreshTasks');
+      const memoryFileSelect = document.getElementById('memoryFileSelect');
+      const refreshMemoryFilesBtn = document.getElementById('refreshMemoryFiles');
+      const openMemoryFileBtn = document.getElementById('openMemoryFile');
+      const memoryFileContent = document.getElementById('memoryFileContent');
+      const workflowJobSelect = document.getElementById('workflowJobSelect');
+      const workflowDateInput = document.getElementById('workflowDateInput');
+      const workflowDryRun = document.getElementById('workflowDryRun');
+      const runWorkflowBtn = document.getElementById('runWorkflowBtn');
+      const workflowResult = document.getElementById('workflowResult');
       const flowSvg = document.getElementById('flowSvg');
       const motionToggle = document.getElementById('motionToggle');
       const pauseAndClearStageBtn = document.getElementById('pauseAndClearStage');
       const spriteGenderToggle = document.getElementById('spriteGenderToggle');
       const chatForm = document.getElementById('chatForm');
+      const chatPath = document.getElementById('chatPath');
       const chatInput = document.getElementById('chatInput');
+      const chatSend = document.getElementById('chatSend');
+      const inferenceRouteStatus = document.getElementById('inferenceRouteStatus');
       const chatLog = document.getElementById('chatLog');
       const motionCanvas = document.getElementById('motionCanvas');
       const motionCtx = motionCanvas.getContext('2d');
@@ -975,10 +1022,11 @@
           { id: 'gptoss', title: 'gpt-oss:20b (LLM)', subtitle: 'Inference Runtime', x: 700, y: 180, w: 180, h: 78, kind: 'integration' },
         ],
         edges: [
-          { from: 'ui', to: 'gateway', label: 'HTTP API: GET/POST /api/agent/control' },
-          { from: 'gateway', to: 'anythingllm', label: 'HTTP API: /api/v1/workspace/:id/chat' },
-          { from: 'anythingllm', to: 'ollama', label: 'Provider API call' },
-          { from: 'ollama', to: 'gptoss', label: 'Local model runtime' },
+          { from: 'ui', to: 'gateway', label: 'HTTP API: /api/agent/command', route: 'all' },
+          { from: 'gateway', to: 'anythingllm', label: 'Path=anythingllm /workspace/:id/chat', route: 'anythingllm' },
+          { from: 'anythingllm', to: 'ollama', label: 'AnythingLLM Provider API', route: 'anythingllm' },
+          { from: 'gateway', to: 'ollama', label: 'Path=ollama /api/generate', route: 'ollama' },
+          { from: 'ollama', to: 'gptoss', label: 'Local model runtime', route: 'all' },
         ],
       };
 
@@ -991,6 +1039,12 @@
       let animationModeOverrideUntil = 0;
       let animationMode = 'sleep';
       let spriteGender = 'female';
+      if (workflowDateInput && !workflowDateInput.value) {
+        const now = new Date();
+        workflowDateInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      }
+      let selectedInferencePath = 'anythingllm';
+      let inferenceRoutesState = null;
 
       const pixelSize = 8;
       const agentPalette = {
@@ -1464,12 +1518,19 @@
         const isActive = controlState?.state === 'running';
         const isPaused = controlState?.state === 'paused';
 
-        const edgeColor = isActive ? '#22d3ee' : (isPaused ? '#f59e0b' : '#64748b');
+        const routeNodes = selectedInferencePath === 'ollama'
+          ? ['gateway', 'ollama', 'gptoss']
+          : ['gateway', 'anythingllm', 'ollama', 'gptoss'];
+        const pausedNodes = selectedInferencePath === 'ollama' ? ['gateway', 'ollama'] : ['gateway', 'anythingllm'];
 
         const edgeMarkup = flowConfig.edges.map((edge) => {
           const from = nodeMap.get(edge.from);
           const to = nodeMap.get(edge.to);
           if (!from || !to) return '';
+
+          const isRouteEdge = edge.route === 'all' || edge.route === selectedInferencePath;
+          const edgeColor = isActive && isRouteEdge ? '#22d3ee' : (isPaused && isRouteEdge ? '#f59e0b' : '#64748b');
+          const edgeOpacity = isRouteEdge ? 0.9 : 0.25;
 
           const startX = from.x + from.w;
           const startY = from.y + (from.h / 2);
@@ -1482,9 +1543,9 @@
           const labelY = ((startY + endY) / 2) - 8;
 
           return `
-            <path d="${path}" fill="none" stroke="${edgeColor}" stroke-width="3" marker-end="url(#arrowhead)" opacity="0.9" />
-            <rect x="${labelX - 130}" y="${labelY - 11}" width="260" height="18" rx="9" fill="rgba(15,23,42,0.95)" stroke="rgba(148,163,184,0.35)" />
-            <text x="${labelX}" y="${labelY + 2}" fill="#cbd5e1" font-size="11" text-anchor="middle">${edge.label}</text>
+            <path d="${path}" fill="none" stroke="${edgeColor}" stroke-width="3" marker-end="url(#arrowhead)" opacity="${edgeOpacity}" />
+            <rect x="${labelX - 130}" y="${labelY - 11}" width="260" height="18" rx="9" fill="rgba(15,23,42,0.95)" stroke="rgba(148,163,184,0.35)" opacity="${isRouteEdge ? 1 : 0.45}" />
+            <text x="${labelX}" y="${labelY + 2}" fill="#cbd5e1" font-size="11" text-anchor="middle" opacity="${isRouteEdge ? 1 : 0.45}">${edge.label}</text>
           `;
         }).join('');
 
@@ -1496,8 +1557,8 @@
             brain: '#032d39',
           };
 
-          const activeNode = isActive && ['gateway', 'anythingllm', 'ollama', 'gptoss'].includes(node.id);
-          const pausedNode = isPaused && ['gateway', 'anythingllm'].includes(node.id);
+          const activeNode = isActive && routeNodes.includes(node.id);
+          const pausedNode = isPaused && pausedNodes.includes(node.id);
           const stroke = activeNode ? '#22d3ee' : (pausedNode ? '#f59e0b' : '#64748b');
           const titleX = node.x + 12;
           const titleY = node.y + 28;
@@ -1683,6 +1744,58 @@
         }
       };
 
+      const refreshMemoryFiles = async () => {
+        const response = await fetch('/api/memory/files');
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || '讀取記憶檔案列表失敗');
+        }
+
+        const files = Array.isArray(payload.data) ? payload.data : [];
+        if (memoryFileSelect) {
+          memoryFileSelect.innerHTML = files.map((file) => `<option value="${file.path}">${file.path}</option>`).join('');
+          if (!files.length) {
+            memoryFileSelect.innerHTML = '<option value="">(沒有可用記憶檔)</option>';
+          }
+        }
+        return files;
+      };
+
+      const openMemoryFile = async (targetPath) => {
+        if (!targetPath) throw new Error('請先選擇記憶檔案');
+        const response = await fetch(`/api/memory/file?path=${encodeURIComponent(targetPath)}`);
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || '開啟記憶檔案失敗');
+        }
+        const content = payload.data?.content || '';
+        const truncated = payload.data?.truncated;
+        if (memoryFileContent) {
+          memoryFileContent.textContent = truncated
+            ? `${content}
+
+[memory] 內容過長，已截斷顯示。`
+            : content;
+        }
+        return payload.data;
+      };
+
+      const runMemoryWorkflow = async ({ job, date, dryRun }) => {
+        const response = await fetch('/api/memory/workflows/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ job, date, dryRun }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || '執行記憶流程失敗');
+        }
+        if (workflowResult) {
+          workflowResult.textContent = JSON.stringify(payload.data, null, 2);
+        }
+        return payload.data;
+      };
+
       const refreshChannels = async () => {
         const response = await fetch('/api/channels');
         const payload = await response.json();
@@ -1716,6 +1829,63 @@
         controlApiConnected = true;
         applyControlState(payload.data);
       };
+      const applyInferenceRouteUiState = (routes) => {
+        const anythingRoute = routes?.anythingllm;
+        const ollamaRoute = routes?.ollama;
+        const anythingEnabled = Boolean(anythingRoute?.enabled);
+        const ollamaEnabled = Boolean(ollamaRoute?.enabled);
+
+        if (chatPath) {
+          const anythingOption = chatPath.querySelector('option[value="anythingllm"]');
+          const ollamaOption = chatPath.querySelector('option[value="ollama"]');
+
+          if (anythingOption) {
+            anythingOption.disabled = !anythingEnabled;
+            anythingOption.textContent = anythingEnabled
+              ? '經 AnythingLLM（預設）'
+              : `經 AnythingLLM（不可用：${anythingRoute?.reason || '未設定'}）`;
+          }
+          if (ollamaOption) {
+            ollamaOption.disabled = !ollamaEnabled;
+            const reason = ollamaRoute?.reason ? `（不可用：${ollamaRoute.reason}）` : '';
+            ollamaOption.textContent = ollamaEnabled
+              ? `直連 Ollama（${ollamaRoute?.model || 'gpt-oss'}）`
+              : `直連 Ollama${reason}`;
+          }
+
+          if (!anythingEnabled && ollamaEnabled) {
+            chatPath.value = 'ollama';
+            selectedInferencePath = 'ollama';
+          }
+        }
+
+        const hasAnyRoute = anythingEnabled || ollamaEnabled;
+        if (chatInput) chatInput.disabled = !hasAnyRoute;
+        if (chatSend) chatSend.disabled = !hasAnyRoute;
+
+        if (inferenceRouteStatus) {
+          if (!hasAnyRoute) {
+            inferenceRouteStatus.textContent = '目前沒有可用推論路徑，請檢查 AnythingLLM API Key 或 Ollama 服務。';
+            inferenceRouteStatus.style.color = '#fda4af';
+          } else if (selectedInferencePath === 'anythingllm') {
+            inferenceRouteStatus.textContent = '目前路徑：AnythingLLM（由 Gateway 轉送）';
+            inferenceRouteStatus.style.color = '#67e8f9';
+          } else {
+            inferenceRouteStatus.textContent = `目前路徑：Ollama 直連（${ollamaRoute?.model || 'gpt-oss'}）`;
+            inferenceRouteStatus.style.color = '#86efac';
+          }
+        }
+      };
+
+      const refreshInferenceRoutes = async () => {
+        const response = await fetch('/api/inference/routes');
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || '讀取推論路徑失敗');
+        }
+        inferenceRoutesState = payload.data?.routes || null;
+        applyInferenceRouteUiState(inferenceRoutesState);
+      };
 
       const sendControl = async (action) => {
         const response = await fetch('/api/agent/control', {
@@ -1731,19 +1901,19 @@
         return payload.data;
       };
 
-      const sendCommand = async (text) => {
+      const sendCommand = async (text, path) => {
         setAnimationMode('think', 2200);
         const response = await fetch('/api/agent/command', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, path }),
         });
         const payload = await response.json();
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || '發送指令失敗');
         }
         setAnimationMode('talk', 2800);
-        return payload.reply;
+        return payload;
       };
 
       button.addEventListener('click', async () => {
@@ -1792,26 +1962,45 @@
       });
 
 
+
+      if (chatPath) {
+        chatPath.addEventListener('change', () => {
+          selectedInferencePath = chatPath.value === 'ollama' ? 'ollama' : 'anythingllm';
+          applyInferenceRouteUiState(inferenceRoutesState);
+          renderFlow(flowLastControlState);
+        });
+      }
+
       chatForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         const text = chatInput.value.trim();
         if (!text) return;
+        const path = chatPath?.value === 'ollama' ? 'ollama' : 'anythingllm';
+        selectedInferencePath = path;
+        renderFlow(flowLastControlState);
 
         chatInput.disabled = true;
-        appendChatLog('user', text);
-        appendLog(`[command] UI 指令送出：${text}`);
+        if (chatPath) chatPath.disabled = true;
+        appendChatLog('user', `[${path}] ${text}`);
+        appendLog(`[command] UI 指令送出（${path}）：${text}`);
 
         try {
-          const reply = await sendCommand(text);
+          const payload = await sendCommand(text, path);
+          selectedInferencePath = payload.path || path;
+          applyInferenceRouteUiState(inferenceRoutesState);
+          renderFlow(flowLastControlState);
+          const reply = payload.reply;
           appendChatLog('agent', reply);
-          status.textContent = '已收到 Agent 回覆。';
-          appendLog('[command] 指令完成');
+          status.textContent = `已收到回覆（${payload.path || path}）。`;
+          appendLog(`[command] 指令完成（${payload.path || path}${payload.model ? ` / ${payload.model}` : ''}）`);
         } catch (error) {
-          appendChatLog('error', error.message);
+          const extraHint = selectedInferencePath === 'ollama' ? '（請確認 Ollama 正在執行）' : '（請確認 AnythingLLM API Key/服務）';
+          appendChatLog('error', `${error.message} ${extraHint}`);
           status.textContent = `指令失敗：${error.message}`;
           appendLog(`[error] 指令失敗：${error.message}`);
         } finally {
           chatInput.disabled = false;
+          if (chatPath) chatPath.disabled = false;
           chatInput.value = '';
           chatInput.focus();
         }
@@ -1859,6 +2048,50 @@
           } catch (error) {
             status.textContent = `任務列表更新失敗：${error.message}`;
             appendLog(`[error] 任務列表更新失敗：${error.message}`);
+          }
+        });
+      }
+
+      if (refreshMemoryFilesBtn) {
+        refreshMemoryFilesBtn.addEventListener('click', async () => {
+          try {
+            await refreshMemoryFiles();
+            appendLog('[memory] 記憶檔案列表已更新');
+          } catch (error) {
+            status.textContent = `記憶檔案列表更新失敗：${error.message}`;
+            appendLog(`[error] 記憶檔案列表更新失敗：${error.message}`);
+          }
+        });
+      }
+
+      if (openMemoryFileBtn) {
+        openMemoryFileBtn.addEventListener('click', async () => {
+          try {
+            const path = memoryFileSelect?.value || '';
+            const file = await openMemoryFile(path);
+            appendLog(`[memory] 已開啟 ${file.path}`);
+          } catch (error) {
+            status.textContent = `開啟記憶檔案失敗：${error.message}`;
+            appendLog(`[error] 開啟記憶檔案失敗：${error.message}`);
+          }
+        });
+      }
+
+      if (runWorkflowBtn) {
+        runWorkflowBtn.addEventListener('click', async () => {
+          try {
+            const job = workflowJobSelect?.value || 'microsync';
+            const date = workflowDateInput?.value || '';
+            const dryRun = Boolean(workflowDryRun?.checked);
+            const result = await runMemoryWorkflow({ job, date, dryRun });
+            appendLog(`[workflow] ${job} 執行完成`);
+            status.textContent = `流程執行完成：${job}`;
+            if (job === 'microsync' || job === 'weekly-compound') {
+              await refreshMemoryFiles();
+            }
+          } catch (error) {
+            status.textContent = `流程執行失敗：${error.message}`;
+            appendLog(`[error] 流程執行失敗：${error.message}`);
           }
         });
       }
@@ -2033,12 +2266,16 @@
         },
       });
 
-      Promise.all([refreshState(), refreshChannels(), refreshTasks()])
-        .then(() => {
+      Promise.all([refreshState(), refreshChannels(), refreshTasks(), refreshInferenceRoutes(), refreshMemoryFiles()])
+        .then(async () => {
           controlApiConnected = true;
           channelsApiConnected = true;
           status.textContent = '已連線 Gateway 控制 API';
           appendLog('[system] 已連線 Gateway 控制 API');
+          const selected = memoryFileSelect?.value || '';
+          if (selected) {
+            await openMemoryFile(selected);
+          }
         })
         .catch((error) => {
           controlApiConnected = false;
