@@ -66,13 +66,15 @@ npx -v
 .\scripts\bootstrap_gateway.ps1
 ```
 
-### 4.2 初始化依賴（LanceDB + Python 套件）
+> `bootstrap_gateway.ps1` 現在會一併檢查/安裝 LanceDB 依賴（`lancedb`, `pyarrow`）；若只想跳過可加 `-SkipLanceDb`。
+
+### 4.2（可選）手動重跑依賴初始化（LanceDB + Python 套件）
 
 ```powershell
 node scripts/init_gateway_env.mjs
 ```
 
-> 會檢查 `node/npm/python3/pip` 並嘗試安裝 `lancedb`、`pyarrow`。
+> 會檢查 `node/npm/python3/pip` 並嘗試安裝 `lancedb`、`pyarrow`（通常僅在你要重跑時才需要）。
 
 ### 4.3 檢查/修復
 

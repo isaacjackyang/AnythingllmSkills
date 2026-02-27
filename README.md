@@ -23,6 +23,57 @@
 
 ## 2) 架構資料流（請先理解這段）
 
+### 2.1 系統架構流程圖
+
+```mermaid
+flowchart LR
+    U[使用者 / 外部系統] --> C[通道層\nTelegram / LINE / Web UI]
+    C --> G[Gateway API\nserver.ts]
+    G --> R[Router + Policy\nintent / rules / control]
+    R --> A[AnythingLLM Client]
+    R --> O[Ollama Client]
+    R --> T[Tools\nshell / http / db / queue]
+    R --> J[Task Runner\nworkers/job_runner.ts]
+    T --> M[(Memory\nLanceDB + Markdown)]
+    J --> M
+    R --> L[Audit Logger + Lifecycle]
+    G --> UI[Approval UI]
+    C <-->|回覆/狀態| G
+```
+
+### 2.2 資料流流程圖（一次請求生命週期）
+
+```mermaid
+sequenceDiagram
+    participant User as 使用者
+    participant Channel as 通道(telegram/line/web_ui)
+    participant Gateway as Gateway API
+    participant Router as Router+Policy
+    participant Brain as AnythingLLM/Ollama
+    participant Tools as Tools/Task Runner
+    participant Memory as LanceDB/Memory Files
+
+    User->>Channel: 發送指令
+    Channel->>Gateway: ingress/api 請求
+    Gateway->>Gateway: 建立標準事件 + trace_id
+    Gateway->>Router: route(event)
+    Router->>Brain: 推理/提案
+    Brain-->>Router: proposal / response
+    Router->>Router: policy 判斷(allow/reject/approve)
+    alt allow
+        Router->>Tools: 執行工具或排程任務
+        Tools->>Memory: 寫入 methodology/pitfall
+        Tools-->>Router: execution result
+    else approval needed
+        Router-->>Gateway: pending approval + confirm_token
+    else reject
+        Router-->>Gateway: policy rejected
+    end
+    Router-->>Gateway: 最終回覆 payload
+    Gateway-->>Channel: 送出結果
+    Channel-->>User: 收到回覆
+```
+
 以 `Gateway` 為主的請求流程：
 
 1. 外部通道進入（`/ingress/telegram`、`/ingress/line`、或 UI 走 `/api/agent/command`）。
@@ -67,6 +118,7 @@ npx -v
 - 檢查 `node/npm/npx`。
 - 在缺少時建立 `package.json`。
 - 安裝本 repo Gateway 需要的本機 dev tooling（`typescript`, `tsx`, `@types/node`）。
+- 檢查並安裝 LanceDB 相關依賴（`lancedb`, `pyarrow`；可用 `-SkipLanceDb` 略過）。
 - 建立 `.env.gateway`（若不存在）。
 - 建立 `scripts/start_gateway.ps1`（若不存在）。
 
@@ -76,7 +128,12 @@ npx -v
 node scripts/init_gateway_env.mjs
 ```
 
+若你想單獨重跑記憶依賴初始化，可手動執行這步。
 這會檢查 `node/npm/python3/pip` 並自動安裝 `lancedb` / `pyarrow`（若缺少）。
+
+> **LanceDB 需要安裝嗎？**
+> - 如果你要使用 `/api/memory/search`、`/api/memory/learn`、Agent 自我進化學習與長期記憶檢索：**需要安裝**。
+> - 如果你只想先跑最小版指令路由（healthz / lifecycle / agent command）且不碰記憶能力：**可先不安裝**，但相關 API 會不可用或退化。
 
 ### Step 3: 先做檢查修復，不急著啟動
 
