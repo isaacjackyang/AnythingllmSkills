@@ -6,9 +6,42 @@ import { isToolProposal, type ToolProposal } from "./proposals/schema";
 import { runHttpRequest } from "./tools/http_request";
 import { queueJob } from "./tools/queue_job";
 import type { BrainClient } from "./anythingllm_client";
+import { recordLearning } from "./memory/evolution";
+import {
+  consumeConfirmToken,
+  createPendingAction,
+  markPendingActionExecuted,
+  type PendingAction,
+} from "./approvals_store";
 
-export async function routeEvent(event: Event, brain: BrainClient): Promise<{ trace_id: string; reply: string }> {
+export async function routeEvent(
+  event: Event,
+  brain: BrainClient,
+  options: { confirm_token?: string } = {},
+): Promise<{ trace_id: string; reply: string }> {
   logStage(event.trace_id, "event", { channel: event.channel, sender: event.sender.id, workspace: event.workspace, agent: event.agent });
+
+  if (options.confirm_token) {
+    const approved = await consumeConfirmToken(options.confirm_token, event.sender.id);
+    if (!approved) {
+      return { trace_id: event.trace_id, reply: "❌ confirm token 無效、過期、已使用，或尚未完成審批" };
+    }
+    const execution = await executeProposal(approved.proposal);
+    await markPendingActionExecuted(approved.id);
+    await recordLearning({
+      scope: `${event.workspace}:${event.agent}`,
+      kind: "methodology",
+      title: "confirmed execution",
+      summary: `Executed via confirm token for tool ${approved.proposal.tool}`,
+      details: { trace_id: event.trace_id, pending_action_id: approved.id },
+    });
+    const reply = await brain.summarize(event, {
+      approval_type: approved.type,
+      pending_action_id: approved.id,
+      execution,
+    });
+    return { trace_id: event.trace_id, reply };
+  }
 
   const proposal = await brain.propose(event);
   if (!isToolProposal(proposal)) throw new Error("Brain must return valid tool_proposal JSON");
@@ -19,14 +52,103 @@ export async function routeEvent(event: Event, brain: BrainClient): Promise<{ tr
   const policy = evaluatePolicy(event, proposal);
   logStage(event.trace_id, "decision", policy);
   if (policy.decision === "reject") return { trace_id: event.trace_id, reply: `❌ rejected: ${policy.reason}` };
-  if (policy.decision === "need-approval") return { trace_id: event.trace_id, reply: "⏳ proposal queued for human approval" };
 
-  const execution = await executeProposal(proposal);
+  if (policy.decision === "need-approval") {
+    const pending = await createPendingAction({
+      type: "approval",
+      proposal,
+      event,
+      requested_by: event.sender.id,
+      reason: policy.reason,
+      requires_approval: true,
+      requires_confirm_token: false,
+      dry_run_plan: buildDryRunPlan(proposal),
+    });
+    return {
+      trace_id: event.trace_id,
+      reply: `⏳ 高風險操作已送審。approval_id=${pending.id}`,
+    };
+  }
+
+  if (policy.decision === "need-double-confirm") {
+    const pending = await createPendingAction({
+      type: "approval",
+      proposal,
+      event,
+      requested_by: event.sender.id,
+      reason: policy.reason,
+      requires_approval: true,
+      requires_confirm_token: true,
+      dry_run_plan: buildDryRunPlan(proposal),
+    });
+    return {
+      trace_id: event.trace_id,
+      reply: `🛑 刪除/格式化屬高敏感操作，需雙重確認：先審批 approval_id=${pending.id}，再用 confirm_token=${pending.confirm_token} 執行。`,
+    };
+  }
+
+  if (policy.decision === "need-confirm") {
+    const pending = await createPendingAction({
+      type: "confirm",
+      proposal,
+      event,
+      requested_by: event.sender.id,
+      reason: policy.reason,
+      requires_approval: false,
+      requires_confirm_token: true,
+      dry_run_plan: buildDryRunPlan(proposal),
+    });
+    return {
+      trace_id: event.trace_id,
+      reply: `🧪 已產生 dry-run 計畫，請帶 confirm_token 再送一次 /api/agent/command。confirm_token=${pending.confirm_token}`,
+    };
+  }
+
+  let execution: Record<string, unknown>;
+  try {
+    execution = await executeProposal(proposal);
+  } catch (error) {
+    await recordLearning({
+      scope: `${event.workspace}:${event.agent}`,
+      kind: "pitfall",
+      title: "tool execution failure",
+      summary: `Tool ${proposal.tool} failed`,
+      details: { trace_id: event.trace_id, error: (error as Error).message, proposal },
+    });
+    throw error;
+  }
+
+  await recordLearning({
+    scope: `${event.workspace}:${event.agent}`,
+    kind: "methodology",
+    title: "tool execution success",
+    summary: `Tool ${proposal.tool} completed`,
+    details: { trace_id: event.trace_id, proposal_tool: proposal.tool },
+  });
   logStage(event.trace_id, "execution", execution);
 
   const reply = await brain.summarize(event, execution);
   logStage(event.trace_id, "outbound", { reply });
   return { trace_id: event.trace_id, reply };
+}
+
+export async function executeApprovedAction(action: PendingAction): Promise<Record<string, unknown>> {
+  if (action.requires_confirm_token) {
+    throw new Error("this action also requires confirm_token; do not execute directly after approval");
+  }
+  const execution = await executeProposal(action.proposal);
+  await markPendingActionExecuted(action.id);
+  return execution;
+}
+
+function buildDryRunPlan(proposal: ToolProposal): Record<string, unknown> {
+  return {
+    tool: proposal.tool,
+    risk: proposal.risk,
+    reason: proposal.reason,
+    input_keys: Object.keys(proposal.inputs ?? {}),
+    trace_id: proposal.trace_id,
+  };
 }
 
 async function executeProposal(proposal: ToolProposal): Promise<Record<string, unknown>> {

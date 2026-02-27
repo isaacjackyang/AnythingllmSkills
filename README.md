@@ -70,7 +70,15 @@ npx -v
 - 建立 `.env.gateway`（若不存在）。
 - 建立 `scripts/start_gateway.ps1`（若不存在）。
 
-### Step 2: 先做檢查修復，不急著啟動
+### Step 2: 初始化依賴（LanceDB / Python）
+
+```powershell
+node scripts/init_gateway_env.mjs
+```
+
+這會檢查 `node/npm/python3/pip` 並自動安裝 `lancedb` / `pyarrow`（若缺少）。
+
+### Step 3: 先做檢查修復，不急著啟動
 
 ```powershell
 .\check_and_fix_gateway.ps1 -NoStart
@@ -82,7 +90,7 @@ npx -v
 - `.env.gateway` 的 `ANYTHINGLLM_API_KEY`、`ANYTHINGLLM_BASE_URL`
 - `npx tsx` 能否執行
 
-### Step 3: 啟動 Gateway
+### Step 4: 啟動 Gateway
 
 ```powershell
 .\scripts\start_gateway.ps1
@@ -116,6 +124,9 @@ Invoke-RestMethod http://localhost:8787/api/channels
 - `GET/POST /api/agent/control`
 - `GET/POST /api/channels`
 - `POST /api/agent/command`
+- `POST /api/memory/learn`（手動寫入經驗）
+- `GET /api/memory/search?q=...`（LanceDB 檢索）
+- `POST /api/system/init`（自動檢查/安裝依賴）
 - `POST /ingress/telegram`
 - `POST /ingress/line`
 - `GET /api/tasks`
@@ -172,3 +183,14 @@ Invoke-RestMethod http://localhost:8787/api/channels
 - `daily wrap-up` 只寫 `second-brain/summaries/`。
 - `weekly compound` 才能重寫 `MEMORY.md` 與下沉 archive。
 - 所有決策條目建議帶 `session_id / session_path / message_range` 以便回鏈。
+
+
+## 11) Agent 自我進化學習（LanceDB + 外部檔案同步）
+
+- Agent 在工具成功/失敗後會自動寫入經驗：
+  - 成功 -> methodology
+  - 失敗 -> pitfall
+- 記憶雙寫：
+  1) LanceDB（主檢索）
+  2) `memory/recent/agent-learning.md`（UI 可直接看）
+- 可透過 `GET /api/memory/architecture` 檢查七層檢索架構快照。

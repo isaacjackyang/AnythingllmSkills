@@ -66,13 +66,21 @@ npx -v
 .\scripts\bootstrap_gateway.ps1
 ```
 
-### 4.2 檢查/修復
+### 4.2 初始化依賴（LanceDB + Python 套件）
+
+```powershell
+node scripts/init_gateway_env.mjs
+```
+
+> 會檢查 `node/npm/python3/pip` 並嘗試安裝 `lancedb`、`pyarrow`。
+
+### 4.3 檢查/修復
 
 ```powershell
 .\check_and_fix_gateway.ps1 -NoStart
 ```
 
-### 4.3 正式啟動
+### 4.4 正式啟動
 
 ```powershell
 .\scripts\start_gateway.ps1
@@ -115,11 +123,16 @@ Invoke-RestMethod http://localhost:8787/api/channels
 - `GET /api/memory/file?path=...`（讀取指定記憶檔內容）
 - `GET /api/memory/workflows`（列出可執行固定流程）
 - `POST /api/memory/workflows/run`（執行固定流程：microsync / daily-wrapup / weekly-compound）
+- `GET /api/memory/architecture`（回傳 LDB 七層混合檢索架構快照）
+- `POST /api/memory/learn`（手動寫入 Agent 經驗：踩坑/方法論/決策）
+- `GET /api/memory/search?q=...&limit=`（走 LanceDB 搜尋 Agent 長期記憶）
+- `POST /api/system/init`（執行初始化檢查與依賴安裝）
 - `POST /api/channels`（channel: `telegram|line|web_ui` + `enabled: boolean`）
 
 ### Web command
 - `POST /api/agent/command`
-  - `text: string`（必填）
+  - `text: string`（可選；若使用 `confirm_token` 可省略）
+  - `confirm_token: string`（可選；用於二次確認執行）
   - `path: "anythingllm" | "ollama"`（選填，預設 `anythingllm`）
   - 若 `web_ui` channel disabled，回 `503`。
   - 當 `path="ollama"` 時，直接呼叫 Ollama `/api/generate`（可用 `OLLAMA_BASE_URL`、`OLLAMA_MODEL` 設定）。
@@ -137,6 +150,11 @@ Invoke-RestMethod http://localhost:8787/api/channels
 - `DELETE /api/tasks/:id`
 - `POST /api/tasks/run-once`
 
+### Approvals（新增）
+- `GET /api/approvals?status=&type=&limit=`
+- `POST /api/approvals/:id/approve`
+- `POST /api/approvals/:id/reject`
+
 ---
 
 ## 7. 新手實戰：先只測 Web UI 通道
@@ -148,6 +166,17 @@ Invoke-RestMethod http://localhost:8787/api/channels
 5. 回傳應含 `trace_id`，可用於後續 log 對帳。
 
 這條路徑穩定後，再接 Telegram/LINE。
+
+
+## 7.1 風險分級與確認流程（新增）
+
+- low 風險：自動執行。
+- medium 風險：回傳 dry-run + `confirm_token`，需再次送 `/api/agent/command` 並帶 token。
+- high 風險：建立 pending approval，需 approver 呼叫 `/api/approvals/:id/approve`。
+- **刪除/格式化（底線）**：永遠啟用「程式雙重確認」：
+  1) approver 先審批 `/api/approvals/:id/approve`
+  2) 使用者再帶 `confirm_token` 呼叫 `/api/agent/command`
+  未通過任一步驟不得執行。
 
 ---
 
@@ -180,6 +209,15 @@ Invoke-RestMethod http://localhost:8787/api/channels
 - 固定流程腳本：`scripts/memory_workflow.js`
 - UI 可直接觸發：`POST /api/memory/workflows/run`
 - 建議預設先用 dry-run，確認輸出後再正式執行。
+
+## 10.1 Agent 自我進化記憶（新增）
+
+- 每次工具執行成功：自動寫入「方法論」條目（methodology）。
+- 每次工具執行失敗：自動寫入「踩坑」條目（pitfall）。
+- 寫入採雙軌同步：
+  1. `LanceDB`（主查詢）
+  2. `memory/recent/agent-learning.md`（給 UI 直接檢視）
+- 可用 `POST /api/memory/learn` 手動補充高價值經驗。
 
 ## 11. 資安檢視與建議
 
