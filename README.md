@@ -149,3 +149,26 @@ Invoke-RestMethod http://localhost:8787/api/channels
 ## 9) 一句話收斂
 
 先把 **Gateway 可啟動、可健康檢查、可送 command** 這三件事做穩，再往 webhook 與多工具擴充，會省下大量排錯時間。
+
+---
+
+## 10) Agent 記憶系統（四層拆分版）
+
+已新增可直接落地的記憶結構與規格：
+
+- 主索引：`MEMORY.md`
+- 暖記憶：`memory/`（每日、recent、projects、archive）
+- 冷記憶：`second-brain/`（summaries、research、devlogs、specs）
+- 規格（含時序/效能治理）：`second-brain/specs/system-memory-architecture.md`
+- 排程 prompt：`second-brain/specs/scheduler-prompts.md`
+- OpenClaw 對齊差異分析：`second-brain/specs/openclaw-gap-analysis.md`
+
+建議先跑最小版本（MEMORY + daily memory + summaries），再擴充到 archive/research 與 QMD。
+
+### 工作流一致性補充
+- 查詢效能建議採「先 warm 後 cold」分層查詢，避免每次全庫搜尋。
+- weekly compound 與 daily wrap-up 不可同時跑，避免並發寫入。
+- `microSync` 只寫 `memory/YYYY-MM-DD.md`。
+- `daily wrap-up` 只寫 `second-brain/summaries/`。
+- `weekly compound` 才能重寫 `MEMORY.md` 與下沉 archive。
+- 所有決策條目建議帶 `session_id / session_path / message_range` 以便回鏈。

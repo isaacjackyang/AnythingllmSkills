@@ -12,6 +12,11 @@
 - 管理 Agent 控制狀態（start/pause/resume/stop）
 - 管理 channel enable/disable
 - 發送 web command 到 `/api/agent/command`
+- 可在 UI 直接開啟記憶檔：`/api/memory/files` + `/api/memory/file`
+- 可在 UI 一鍵執行固定記憶流程：`/api/memory/workflows/run`（microSync / daily-wrapup / weekly-compound）
+- 提供路徑選擇：`經 AnythingLLM` 或 `直連 Ollama（gpt-oss）`
+- 依 `/api/inference/routes` 自動顯示可用路徑（例如未設定 AnythingLLM API Key 時會自動切到 Ollama）
+- API 資料流拓樸會依目前選擇的路徑高亮，避免「假連線」視覺誤導
 - 呈現簡化的操作輸出區，方便快速驗證流程
 
 你可以把它當「運維與驗證工具頁」。
@@ -52,6 +57,10 @@
 - `GET /api/channels`
 - `POST /api/channels`
 - `POST /api/agent/command`
+- `GET /api/memory/files`
+- `GET /api/memory/file?path=...`
+- `GET /api/memory/workflows`
+- `POST /api/memory/workflows/run`
 
 只要其中任何關鍵 API 失敗，UI 上部分功能就會失效或顯示異常。
 
