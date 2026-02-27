@@ -61,6 +61,10 @@
 - `GET /api/memory/file?path=...`
 - `GET /api/memory/workflows`
 - `POST /api/memory/workflows/run`
+- `GET /api/memory/architecture`
+- `POST /api/memory/learn`
+- `GET /api/memory/search?q=...`
+- `POST /api/system/init`
 
 只要其中任何關鍵 API 失敗，UI 上部分功能就會失效或顯示異常。
 
@@ -68,17 +72,21 @@
 
 ## 5) 新手驗證流程（最穩）
 
-1. 在 repo root 啟動 Gateway：
+1. 先初始化依賴：
+   ```powershell
+   node scripts/init_gateway_env.mjs
+   ```
+2. 在 repo root 啟動 Gateway：
    ```powershell
    .\scripts\start_gateway.ps1
    ```
-2. 先檢查：
+3. 先檢查：
    ```powershell
    Invoke-RestMethod http://localhost:8787/healthz
    ```
-3. 開啟 `http://localhost:8787/approval-ui`。
-4. 先做控制測試：`Start -> Pause -> Resume -> Stop`。
-5. 再測 web command：送一段簡單文本，確認有 response/trace。
+4. 開啟 `http://localhost:8787/approval-ui`。
+5. 先做控制測試：`Start -> Pause -> Resume -> Stop`。
+6. 再測 web command：送一段簡單文本，確認有 response/trace。
 
 ---
 

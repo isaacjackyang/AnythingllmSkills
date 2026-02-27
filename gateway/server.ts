@@ -8,12 +8,15 @@ import { TelegramConnector } from "./connectors/telegram/connector";
 import { AnythingLlmClient } from "./core/anythingllm_client";
 import { OllamaClient } from "./core/ollama_client";
 import { getLifecycleSnapshot, parseHeartbeatInterval, startHeartbeat, updateSoul } from "./core/lifecycle";
-import { routeEvent } from "./core/router";
+import { executeApprovedAction, routeEvent } from "./core/router";
 import { applyAgentControl, getAgentControlSnapshot } from "./core/agent_control";
 import { createEvent } from "./core/event";
 import { getChannelSnapshot, isChannelEnabled, markChannelActivity, setChannelEnabled } from "./core/channel_control";
 import { cancelTask, deleteTask, getTaskById, listTasks } from "./core/tasks/store";
 import { runQueuedJobsOnce, startJobRunner } from "./workers/job_runner";
+import { decidePendingAction, getPendingActionById, listPendingActions } from "./core/approvals_store";
+import { getLdbArchitectureSnapshot } from "./core/memory/ldb_architecture";
+import { recordLearning, searchLearning } from "./core/memory/evolution";
 
 const port = Number(process.env.PORT ?? 8787);
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN ?? "";
@@ -72,6 +75,7 @@ const memoryBrowseRoots = [
 const memoryRootFile = path.resolve(process.cwd(), "MEMORY.md");
 const execFileAsync = promisify(execFile);
 const workflowScriptPath = path.resolve(process.cwd(), "scripts/memory_workflow.js");
+const initGatewayScriptPath = path.resolve(process.cwd(), "scripts/init_gateway_env.mjs");
 
 const server = createServer(async (req, res) => {
   if (req.method === "GET" && req.url === "/approval-ui") {
@@ -233,6 +237,68 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+
+  if (req.method === "POST" && req.url === "/api/memory/learn") {
+    try {
+      const raw = await readBody(req);
+      const payload = raw ? JSON.parse(raw) : {};
+      const scope = String(payload.scope ?? `${workspace}:${agent}`).trim();
+      const kind = String(payload.kind ?? "methodology").trim() as "pitfall" | "methodology" | "decision";
+      const title = String(payload.title ?? "manual learning").trim();
+      const summary = String(payload.summary ?? "").trim();
+      const details = (payload.details && typeof payload.details === "object") ? payload.details : {};
+      if (!summary) throw new Error("summary is required");
+      if (!["pitfall", "methodology", "decision"].includes(kind)) throw new Error("invalid learning kind");
+
+      const result = await recordLearning({ scope, kind, title, summary, details });
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true, data: result }));
+      return;
+    } catch (error) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: sanitizePublicError(error, "記憶寫入失敗") }));
+      return;
+    }
+  }
+
+  if (req.method === "GET" && req.url?.startsWith("/api/memory/search")) {
+    try {
+      const requestUrl = new URL(req.url ?? "/", "http://localhost");
+      const query = String(requestUrl.searchParams.get("q") ?? "").trim();
+      const limit = Number(requestUrl.searchParams.get("limit") ?? 20);
+      if (!query) throw new Error("q is required");
+      const result = await searchLearning(query, limit);
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true, data: result.items, warning: result.warning }));
+      return;
+    } catch (error) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: sanitizePublicError(error, "LanceDB 搜尋失敗") }));
+      return;
+    }
+  }
+
+  if (req.method === "POST" && req.url === "/api/system/init") {
+    try {
+      const { stdout } = await execFileAsync(process.execPath, [initGatewayScriptPath], { cwd: process.cwd(), timeout: 120_000, maxBuffer: 1024 * 1024 * 4 });
+      const parsed = stdout ? JSON.parse(stdout) : { ok: false, error: "empty init output" };
+      if (!parsed.ok) throw new Error(parsed.error || "init failed");
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify(parsed));
+      return;
+    } catch (error) {
+      res.statusCode = 500;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: sanitizePublicError(error, "初始化失敗") }));
+      return;
+    }
+  }
+
   if (req.method === "GET" && req.url === "/api/channels") {
     res.statusCode = 200;
     res.setHeader("content-type", "application/json");
@@ -299,6 +365,84 @@ const server = createServer(async (req, res) => {
     }
   }
 
+
+  if (req.method === "GET" && req.url === "/api/memory/architecture") {
+    res.statusCode = 200;
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ ok: true, data: getLdbArchitectureSnapshot() }));
+    return;
+  }
+
+  if (req.method === "GET" && req.url?.startsWith("/api/approvals")) {
+    try {
+      const url = new URL(req.url, `http://localhost:${port}`);
+      const status = url.searchParams.get("status") ?? undefined;
+      const type = url.searchParams.get("type") ?? undefined;
+      const limit = Number(url.searchParams.get("limit") ?? 50);
+      const data = await listPendingActions({
+        status: status as "pending" | "approved" | "rejected" | "executed" | "expired" | undefined,
+        type: type as "approval" | "confirm" | undefined,
+        limit,
+      });
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true, data }));
+      return;
+    } catch (error) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: (error as Error).message }));
+      return;
+    }
+  }
+
+  if (req.method === "POST" && /^\/api\/approvals\/[^/]+\/(approve|reject)$/.test(req.url ?? "")) {
+    try {
+      const match = (req.url ?? "").match(/^\/api\/approvals\/([^/]+)\/(approve|reject)$/);
+      if (!match) throw new Error("invalid approval route");
+      const actionId = decodeURIComponent(match[1]);
+      const decision = match[2] as "approve" | "reject";
+      const raw = await readBody(req);
+      const payload = raw ? JSON.parse(raw) : {};
+      const actorId = String(payload.actor_id ?? "approval-ui").trim();
+      const reason = typeof payload.reason === "string" ? payload.reason : undefined;
+
+      const decided = await decidePendingAction(actionId, actorId, decision, reason);
+      if (decision === "reject") {
+        res.statusCode = 200;
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ ok: true, data: decided }));
+        return;
+      }
+
+      const fresh = await getPendingActionById(actionId);
+      if (!fresh) throw new Error("pending action not found after approval");
+
+      if (fresh.requires_confirm_token) {
+        res.statusCode = 200;
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({
+          ok: true,
+          data: fresh,
+          next_step: "confirm_token_required",
+          confirm_token: fresh.confirm_token,
+        }));
+        return;
+      }
+
+      const execution = await executeApprovedAction(fresh);
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true, data: decided, execution }));
+      return;
+    } catch (error) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: (error as Error).message }));
+      return;
+    }
+  }
+
   if (req.method === "POST" && req.url === "/api/agent/command") {
     try {
       if (!isChannelEnabled("web_ui")) {
@@ -311,7 +455,8 @@ const server = createServer(async (req, res) => {
       const payload = raw ? JSON.parse(raw) : {};
       const text = String(payload.text ?? "").trim();
       const path = String(payload.path ?? "anythingllm").trim();
-      if (!text) throw new Error("text is required");
+      const confirmToken = typeof payload.confirm_token === "string" ? payload.confirm_token.trim() : "";
+      if (!text && !confirmToken) throw new Error("text or confirm_token is required");
       if (!["anythingllm", "ollama"].includes(path)) throw new Error("path must be anythingllm or ollama");
 
       markChannelActivity("web_ui");
@@ -338,7 +483,7 @@ const server = createServer(async (req, res) => {
       if (path === "ollama") {
         reply = await ollama.generate(text);
       } else {
-        const result = await routeEvent(event, brain);
+        const result = await routeEvent(event, brain, { confirm_token: confirmToken || undefined });
         reply = result.reply;
       }
       await sendReplyByChannel(event, reply);
