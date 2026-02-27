@@ -2,6 +2,7 @@ param(
   [string]$EnvFile = ".env.gateway",
   [string]$StartScriptFile = "scripts/start_gateway.ps1",
   [switch]$SkipTooling,
+  [switch]$SkipLanceDb,
   [switch]$PrintEnv,
   [switch]$Help
 )
@@ -59,6 +60,7 @@ Options:
   -EnvFile <path>   Output env template file path (default: .env.gateway)
   -StartScriptFile  Output start script path (default: scripts/start_gateway.ps1)
   -SkipTooling      Skip npm install of typescript/tsx/@types-node
+  -SkipLanceDb      Skip LanceDB dependency check/install
   -PrintEnv         Print env template and exit
   -Help             Show this help
 "@ | Write-Host
@@ -192,6 +194,27 @@ try {
   } else {
     Warn "Skipping TypeScript tooling install (-SkipTooling)."
     Add-CheckSummary "Skipped tooling installation by request (-SkipTooling)"
+  }
+
+  if (-not $SkipLanceDb) {
+    $initScript = Join-Path $ProjectRoot "scripts/init_gateway_env.mjs"
+    if (Test-Path $initScript) {
+      Log "Checking/installing LanceDB dependencies (lancedb/pyarrow)..."
+      try {
+        Invoke-CheckedCommand "node" @($initScript)
+        Add-InstallSummary "Checked/installed LanceDB dependencies via scripts/init_gateway_env.mjs"
+      } catch {
+        Warn "LanceDB dependency bootstrap failed: $($_.Exception.Message)"
+        Warn "Memory APIs may be unavailable until LanceDB dependencies are installed."
+        Add-CheckSummary "LanceDB bootstrap attempted but failed"
+      }
+    } else {
+      Warn "LanceDB init script not found: $initScript"
+      Add-CheckSummary "LanceDB init script missing"
+    }
+  } else {
+    Warn "Skipping LanceDB dependency check/install (-SkipLanceDb)."
+    Add-CheckSummary "Skipped LanceDB dependency bootstrap by request (-SkipLanceDb)"
   }
 
   if (Test-Path $ResolvedEnvFile) {
