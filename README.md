@@ -157,6 +157,25 @@ node scripts/init_gateway_env.mjs
 ```
 
 啟動腳本行為（目前實作）：
+
+### 懶人一鍵安裝（新）
+
+如果你希望用單一入口一次完成安裝，可使用：
+
+```powershell
+.\bootstrap_all.ps1
+```
+
+常見參數：
+
+- `-Target gateway`：只處理 Gateway
+- `-Target open-in-explorer`：只處理 `mcp-open-in-explorer`
+- `-RunHealthChecks`：額外跑 Gateway `-NoStart` 檢查與 open-in-explorer 啟動健康檢查
+- `-SkipGatewayTooling` / `-SkipGatewayLanceDb`：略過 Gateway 部分安裝
+- `-SkipExplorerInstall` / `-SkipExplorerBuild`：略過 open-in-explorer 部分安裝
+
+> 建議：把它當作「入口腳本」，底層仍維持各自 `bootstrap/start` 腳本，這樣既有懶人操作，也保留模組化可維護性。
+
 1. 讀取 `.env.gateway` 注入目前 process 環境。
 2. 背景啟動 `npx tsx gateway/server.ts`。
 3. 輪詢 `/healthz`（預設等 20 秒）。
