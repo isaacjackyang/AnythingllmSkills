@@ -23,6 +23,29 @@
 
 ## 2) 架構資料流（請先理解這段）
 
+## 2.0 近期重構重點：大型 TS 已拆成小模組
+
+如果你之前看過舊版，會記得很多邏輯集中在單一入口檔。
+目前已改為「`create_app.ts` 組裝 + `routes/*` 分路由 + `core/*` 分領域 + `workers/*` 背景任務」：
+
+- `gateway/server.ts`
+  - 只保留啟動與 graceful shutdown 綁定。
+- `gateway/create_app.ts`
+  - 負責讀取環境變數、組裝 Router、掛 middleware、註冊所有 route。
+- `gateway/routes/*.ts`
+  - 每支 API 路由拆成獨立模組（health/channels/command/tasks/memory...）。
+- `gateway/core/*.ts`
+  - 放業務能力與治理層（policy、agent registry、approvals、tools、memory、lifecycle）。
+- `gateway/workers/job_runner.ts`
+  - 只處理任務輪詢與執行。
+
+這種拆法的直接好處：
+
+1. 單檔複雜度下降：除錯時可直接定位到對應領域模組。
+2. API 風險隔離：某路由調整不會牽連整份 server 入口。
+3. 測試粒度更細：可對 `core` 與 `routes` 做定向測試。
+4. 後續擴充更穩：新增通道/工具/記憶功能時，不需要再回到巨型單檔修改。
+
 ### 2.1 系統架構流程圖
 
 ```mermaid
