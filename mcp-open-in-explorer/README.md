@@ -1,5 +1,13 @@
 # mcp-open-in-explorer（Windows-only）完整說明
 
+## 文件維護狀態（2026-02-28）
+
+- 已完成文件巡檢：本檔內容已依目前專案結構重新確認。
+- 建議每次合併程式變更後，同步更新本檔中「啟動、驗證、限制」三類資訊。
+- 本次檢查環境受 registry 權限限制，未能完成 `npm install` 與 TypeScript 測試依賴安裝；需在可存取 npm registry 的環境重跑完整測試。
+
+---
+
 > 這是一個單一職責的 MCP Server：
 > **只提供 `open_in_explorer({ path })`，把指定檔案/資料夾交給 Windows Explorer 定位。**
 

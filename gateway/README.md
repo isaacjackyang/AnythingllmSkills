@@ -21,7 +21,32 @@ Gateway 做的事情不是「替代 LLM」，而是把 LLM 的能力包進可治
 
 ## 2. 目錄導覽（以目前程式碼為準）
 
-- `server.ts`：HTTP server 與所有 API/ingress 路由。
+## 2.0 重構總覽：從巨型入口檔改為模組化組裝
+
+目前 Gateway 啟動鏈路已明確分層：
+
+1. `server.ts`
+   - 極薄入口：只做 `loadConfigFromEnv()`、`createApp()`、`server.listen()`。
+   - 系統訊號（`SIGTERM` / `SIGINT`）只在這層掛上 graceful shutdown。
+2. `create_app.ts`
+   - 集中處理組態解析、middleware 建立、route 註冊、HTTP server 組裝。
+   - 也負責把 `core/*` 能力（brain、policy、agent registry、task runner）串成完整應用。
+3. `routes/*.ts`
+   - 每個 API endpoint 群組獨立成檔，降低跨功能耦合。
+4. `core/*.ts`
+   - 放業務核心與治理能力（如 policy、approvals、channel control、tools、memory）。
+5. `workers/*.ts`
+   - 專責背景程序（目前是 task/job runner）。
+
+### 為什麼這樣拆
+
+- **可讀性**：新同事可以先看 `server.ts` 再進 `create_app.ts`，不會一開始就掉進巨型檔案。
+- **可維護性**：新增 API 以「新增 route 模組 + 註冊」為主，不必改大段核心程式。
+- **可測試性**：`core/__tests__` 已可按領域切分（router、policy、task queue、memory evolution…）。
+- **可部署性**：入口穩定後，啟動與監控腳本不需頻繁調整。
+
+- `server.ts`：啟動入口（listen + signal shutdown hook）。
+- `create_app.ts`：Gateway 組裝中心（config/middleware/routes/server）。
 - `connectors/telegram`, `connectors/line`：訊息平台轉換與 reply 邏輯。
 - `core/router.ts`：核心事件路由協調。
 - `core/anythingllm_client.ts`：對 AnythingLLM API 的封裝。
@@ -31,6 +56,20 @@ Gateway 做的事情不是「替代 LLM」，而是把 LLM 的能力包進可治
 - `core/lifecycle.ts`：心跳與生命週期狀態。
 - `workers/job_runner.ts`：背景任務輪詢執行。
 - `web/approval_ui/`：控制台前端靜態頁。
+
+### 路由模組對照（重點節錄）
+
+- `routes/health.ts`：`/healthz`、`/lifecycle`、`/lifecycle/soul`
+- `routes/agent_control.ts`：`/api/agent/control`
+- `routes/agents.ts`：`/api/agents*`、`/api/agent/communications`
+- `routes/channels.ts`：`/api/channels`
+- `routes/command.ts`：`/api/agent/command`
+- `routes/inference.ts`：`/api/inference/routes`
+- `routes/memory.ts`：`/api/memory/*`
+- `routes/tasks.ts`：`/api/tasks*`
+- `routes/approvals.ts`：`/api/approvals*`
+- `routes/ingress_telegram.ts`、`routes/ingress_line.ts`：通道 webhook 入口
+- `routes/system.ts`：`/api/system/init`
 
 > 注意：`connectors/discord`、`connectors/slack` 有檔案，但目前 `server.ts` 實際啟用的是 telegram/line/web_ui 流程。
 
