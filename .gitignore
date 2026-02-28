@@ -1,0 +1,11 @@
+node_modules/
+.env*
+dist/
+*.log
+.gemini/
+brain/
+tmp/
+*.exe
+data/
+gateway/data/
+package-lock.json

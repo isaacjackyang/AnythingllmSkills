@@ -4,9 +4,12 @@ import { evaluatePolicy } from "./policy/rules";
 import { getProposal, saveProposal } from "./proposals/store";
 import { isToolProposal, type ToolProposal } from "./proposals/schema";
 import { runHttpRequest } from "./tools/http_request";
+import { runDbQuery } from "./tools/db_query";
 import { queueJob } from "./tools/queue_job";
 import type { BrainClient } from "./anythingllm_client";
 import { recordLearning } from "./memory/evolution";
+import { addTurn, getHistory } from "./conversation_store";
+import { sendAgentMessage } from "./agent_messaging";
 import {
   consumeConfirmToken,
   createPendingAction,
@@ -43,6 +46,9 @@ export async function routeEvent(
     return { trace_id: event.trace_id, reply };
   }
 
+  // Record user message in conversation history (P3-A)
+  addTurn(event.conversation.thread_id, "user", event.message.text);
+
   const proposal = await brain.propose(event);
   if (!isToolProposal(proposal)) throw new Error("Brain must return valid tool_proposal JSON");
   if (getProposal(proposal.idempotency_key)) throw new Error("duplicate proposal blocked by idempotency_key");
@@ -50,7 +56,7 @@ export async function routeEvent(
   logStage(event.trace_id, "proposal", { tool: proposal.tool, risk: proposal.risk, idempotency_key: proposal.idempotency_key });
 
   const policy = evaluatePolicy(event, proposal);
-  logStage(event.trace_id, "decision", policy);
+  logStage(event.trace_id, "decision", { ...policy });
   if (policy.decision === "reject") return { trace_id: event.trace_id, reply: `❌ rejected: ${policy.reason}` };
 
   if (policy.decision === "need-approval") {
@@ -128,6 +134,7 @@ export async function routeEvent(
   logStage(event.trace_id, "execution", execution);
 
   const reply = await brain.summarize(event, execution);
+  addTurn(event.conversation.thread_id, "assistant", reply);
   logStage(event.trace_id, "outbound", { reply });
   return { trace_id: event.trace_id, reply };
 }
@@ -167,11 +174,18 @@ async function executeProposal(proposal: ToolProposal, agentId?: string): Promis
         agent_id: agentId,
       });
     case "db_query":
-      return { rows: [] };
+      return runDbQuery(proposal.inputs as { sql: string });
     case "send_message":
-      return { delivered: true };
+      throw new Error("send_message tool is not yet implemented. Configure a messaging provider to enable this tool.");
     case "shell_command":
-      return { blocked: true, reason: "shell disabled" };
+      throw new Error("shell_command tool is disabled for security");
+    case "forward_to_agent": {
+      const toAgentId = String(proposal.inputs.to_agent_id ?? "").trim();
+      const content = String(proposal.inputs.content ?? proposal.reason ?? "").trim();
+      if (!toAgentId) throw new Error("forward_to_agent requires to_agent_id");
+      const msg = sendAgentMessage(agentId ?? "primary", toAgentId, content, { trace_id: proposal.trace_id });
+      return { forwarded: true, message_id: msg.id, to_agent_id: toAgentId };
+    }
     default:
       throw new Error(`unsupported tool: ${proposal.tool}`);
   }

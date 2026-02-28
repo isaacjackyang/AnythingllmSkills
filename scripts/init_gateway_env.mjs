@@ -11,28 +11,45 @@ function run(cmd, args, optional = false) {
 }
 
 function exists(cmd) {
-  const r = spawnSync("bash", ["-lc", `command -v ${cmd}`], { encoding: "utf8" });
-  return r.status === 0;
+  try {
+    const checkCmd = process.platform === "win32" ? "where" : "command";
+    const args = process.platform === "win32" ? [cmd] : ["-v", cmd];
+    const r = spawnSync(checkCmd, args, { encoding: "utf8" });
+    return r.status === 0;
+  } catch {
+    return false;
+  }
 }
 
 function main() {
   const report = [];
-  if (!exists("node")) throw new Error("node is required");
-  if (!exists("npm")) throw new Error("npm is required");
-  if (!exists("python3")) throw new Error("python3 is required");
+  const nodeCmd = "node";
+  const npmCmd = "npm";
+  let pythonCmd = "python3";
 
-  report.push({ step: "node", ok: true, version: run("node", ["-v"]).output });
-  report.push({ step: "npm", ok: true, version: run("npm", ["-v"]).output });
-  report.push({ step: "python3", ok: true, version: run("python3", ["--version"]).output });
+  if (!exists(nodeCmd)) throw new Error("node is required");
+  if (!exists(npmCmd)) throw new Error("npm is required");
 
-  const pip = run("python3", ["-m", "pip", "--version"], true);
-  if (!pip.ok) throw new Error("python3 -m pip is required");
+  if (!exists(pythonCmd)) {
+    if (exists("python")) {
+      pythonCmd = "python";
+    } else {
+      throw new Error("python3 or python is required");
+    }
+  }
+
+  report.push({ step: "node", ok: true, version: run(nodeCmd, ["-v"]).output });
+  report.push({ step: "npm", ok: true, version: run(npmCmd, ["-v"]).output });
+  report.push({ step: "python", ok: true, version: run(pythonCmd, ["--version"]).output, cmd: pythonCmd });
+
+  const pip = run(pythonCmd, ["-m", "pip", "--version"], true);
+  if (!pip.ok) throw new Error(`${pythonCmd} -m pip is required`);
   report.push({ step: "pip", ok: true, version: pip.output });
 
-  const install = run("python3", ["-m", "pip", "install", "--user", "lancedb", "pyarrow"], true);
+  const install = run(pythonCmd, ["-m", "pip", "install", "--user", "lancedb", "pyarrow"], true);
   report.push({ step: "pip-install-lancedb", ok: install.ok, output: install.output.slice(0, 2000) });
 
-  const importCheck = run("python3", ["-c", "import lancedb;print('ok')"], true);
+  const importCheck = run(pythonCmd, ["-c", "import lancedb;print('ok')"], true);
   report.push({ step: "import-lancedb", ok: importCheck.ok, output: importCheck.output });
 
   const overallOk = report.every((r) => r.ok);

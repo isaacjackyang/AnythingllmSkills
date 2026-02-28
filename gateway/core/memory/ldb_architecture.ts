@@ -60,7 +60,17 @@ export function getLdbArchitectureSnapshot(): LdbArchitectureSnapshot {
       lancedb_uri: "gateway/data/lancedb",
       markdown_log_path: "memory/recent/agent-learning.md",
     },
-    endpoints: ["GET /api/memory/architecture", "POST /api/memory/learn", "GET /api/memory/search"],
+    endpoints: [
+      "GET /api/memory/architecture",
+      "POST /api/memory/learn",
+      "GET /api/memory/search",
+      "GET /api/memory/files",
+      "GET /api/memory/file",
+      "GET /api/memory/workflows",
+      "POST /api/memory/workflows/run",
+      "GET /api/agent/messages",
+      "POST /api/agent/messages",
+    ],
     rulebook: {
       auto_capture_enabled: true,
       confirmed_only_write: true,

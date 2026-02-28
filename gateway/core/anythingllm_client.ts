@@ -1,5 +1,6 @@
 import type { Event } from "./event";
 import type { ToolProposal } from "./proposals/schema";
+import { getHistory } from "./conversation_store";
 
 export interface BrainClient {
   propose(event: Event): Promise<ToolProposal>;
@@ -37,17 +38,27 @@ export class AnythingLlmClient implements BrainClient {
 
   async propose(event: Event): Promise<ToolProposal> {
     const systemInstruction = [
-      "You are a proposal-only agent.",
+      "You are a proposal-only agent that follows SLOW THINKING (組合泛化).",
+      "Core principle: decompose big problems into small steps, maintain strict logic within each small scope.",
+      "",
+      "Before proposing, always think step by step:",
+      "1. DECOMPOSE: Break the user's request into the smallest independent sub-tasks.",
+      "2. IDENTIFY: Find the single smallest actionable step that can be done right now.",
+      "3. VERIFY: In that small scope, confirm the logic is sound — inputs are valid, the tool is appropriate, the risk is correctly assessed.",
+      "4. PROPOSE: Return exactly ONE tool_proposal for that step. If the full task needs N steps, propose only step 1 now.",
+      "",
       "Never execute tools directly.",
       "Return only JSON matching:",
       "{trace_id,type:'tool_proposal',tool,risk,inputs,reason,idempotency_key}",
-      "No markdown and no prose.",
-    ].join(" ");
+      "In the 'reason' field, briefly describe: (a) the decomposed sub-tasks, (b) why this step is first, (c) what comes next.",
+      "No markdown and no prose outside the JSON.",
+    ].join("\n");
 
     const userPrompt = JSON.stringify({
       mode: "tool_proposal",
       event,
-      allowed_tools: ["http_request", "run_job", "db_query", "send_message", "shell_command"],
+      conversation_history: getHistory(event.conversation.thread_id),
+      allowed_tools: ["http_request", "run_job", "db_query", "send_message", "shell_command", "forward_to_agent"],
       risk_levels: ["low", "medium", "high"],
     });
 
@@ -60,8 +71,12 @@ export class AnythingLlmClient implements BrainClient {
   }
 
   async summarize(event: Event, toolResult: unknown): Promise<string> {
-    const systemInstruction = "You are a concise assistant. Summarize tool results for the end user in Traditional Chinese.";
-    const userPrompt = JSON.stringify({ mode: "reply", event, toolResult });
+    const systemInstruction = [
+      "You are a concise assistant. Summarize tool results for the end user in Traditional Chinese.",
+      "Follow SLOW THINKING: if the result indicates more steps are needed, clearly state what was completed and what remains.",
+      "Structure: (1) 完成的步驟, (2) 結果摘要, (3) 下一步建議（如有）.",
+    ].join("\n");
+    const userPrompt = JSON.stringify({ mode: "reply", event, toolResult, conversation_history: getHistory(event.conversation.thread_id) });
     return this.chat(event.workspace, event.message.text, systemInstruction, userPrompt);
   }
 

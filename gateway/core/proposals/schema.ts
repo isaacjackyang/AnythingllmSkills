@@ -1,4 +1,4 @@
-export type ToolName = "http_request" | "run_job" | "db_query" | "send_message" | "shell_command";
+export type ToolName = "http_request" | "run_job" | "db_query" | "send_message" | "shell_command" | "forward_to_agent";
 export type RiskLevel = "low" | "medium" | "high";
 
 export interface ToolProposal {

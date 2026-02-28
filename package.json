@@ -1,0 +1,35 @@
+{
+  "name": "anythingllmskills",
+  "version": "1.0.0",
+  "description": "> 你可以把這個 repo 想成一個「可控的 AI 執行中樞」。\r > 它不是只有 prompt，而是把 **通道接入、策略控管、工具執行、任務排程、審計追蹤** 都做成可落地的工程結構。",
+  "main": "index.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isaacjackyang/AnythingllmSkills.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/isaacjackyang/AnythingllmSkills/issues"
+  },
+  "homepage": "https://github.com/isaacjackyang/AnythingllmSkills#readme",
+  "devDependencies": {
+    "@types/node": "^25.3.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "esbuild": "^0.27.3",
+    "get-tsconfig": "^4.13.6",
+    "resolve-pkg-maps": "^1.0.0",
+    "undici-types": "^7.18.2"
+  }
+}

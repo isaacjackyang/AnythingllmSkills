@@ -1,13 +1,14 @@
 import { mkdir, appendFile, writeFile, access } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { spawnSync } from "node:child_process";
 
 const memoryDir = path.resolve(process.cwd(), "memory/recent");
 const learningFile = path.resolve(memoryDir, "agent-learning.md");
 const bridgePath = path.resolve(process.cwd(), "scripts/lancedb_memory_bridge.py");
 const ldbUri = path.resolve(process.cwd(), "gateway/data/lancedb");
 const ldbTable = process.env.LDB_TABLE ?? "agent_memory";
+const BRIDGE_TIMEOUT_MS = Number(process.env.BRIDGE_TIMEOUT_MS) || 10_000;
 
 export type LearningKind = "pitfall" | "methodology" | "decision";
 
@@ -43,15 +44,48 @@ async function appendLearningMarkdown(entry: LearningEntry, createdAt: string): 
   await appendFile(learningFile, `${body}\n`, "utf8");
 }
 
-function runBridge(command: "upsert" | "search", payload: Record<string, unknown>): Record<string, unknown> {
-  const result = spawnSync("python3", [bridgePath, command], {
-    input: JSON.stringify(payload),
-    encoding: "utf8",
+/**
+ * Run the LanceDB Python bridge asynchronously (non-blocking).
+ * Previous version used spawnSync which blocked the entire event loop.
+ */
+function runBridge(command: "upsert" | "search", payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("python3", [bridgePath, command], {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error(`bridge timeout after ${BRIDGE_TIMEOUT_MS}ms`));
+    }, BRIDGE_TIMEOUT_MS);
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
+    child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      if (code !== 0) {
+        reject(new Error((stdout || stderr || "bridge failed").trim()));
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout || "{}"));
+      } catch {
+        reject(new Error(`bridge returned invalid JSON: ${stdout.slice(0, 200)}`));
+      }
+    });
+
+    child.on("error", (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+
+    child.stdin.write(JSON.stringify(payload));
+    child.stdin.end();
   });
-  if (result.status !== 0) {
-    throw new Error((result.stdout || result.stderr || "bridge failed").trim());
-  }
-  return JSON.parse(result.stdout || "{}");
 }
 
 async function upsertLanceDb(entry: LearningEntry, createdAt: string): Promise<void> {
@@ -67,7 +101,7 @@ async function upsertLanceDb(entry: LearningEntry, createdAt: string): Promise<v
       created_at: createdAt,
     },
   };
-  const parsed = runBridge("upsert", payload);
+  const parsed = await runBridge("upsert", payload);
   if (!parsed.ok) {
     throw new Error(String(parsed.error || "lancedb upsert failed"));
   }
@@ -88,10 +122,11 @@ export async function recordLearning(entry: LearningEntry): Promise<{ markdown_s
   }
 }
 
-export async function searchLearning(query: string, limit = 20): Promise<{ items: unknown[]; warning?: string }> {
+export async function searchLearning(query: string, limit = 20, namespace?: string): Promise<{ items: unknown[]; warning?: string }> {
   try {
-    const payload = { db_uri: ldbUri, table: ldbTable, query, limit };
-    const parsed = runBridge("search", payload);
+    const payload: Record<string, unknown> = { db_uri: ldbUri, table: ldbTable, query, limit };
+    if (namespace) payload.filter_namespace = namespace;
+    const parsed = await runBridge("search", payload);
     if (!parsed.ok) throw new Error(String(parsed.error || "lancedb search failed"));
     return { items: (parsed.data as unknown[]) ?? [] };
   } catch (error) {
