@@ -19,7 +19,18 @@ import { getLdbArchitectureSnapshot } from "./core/memory/ldb_architecture";
 import { recordLearning, searchLearning } from "./core/memory/evolution";
 import { createAgent, ensurePrimaryAgent, getAgentById, listAgents, updateAgent } from "./core/agents_registry";
 
-const port = Number(process.env.PORT ?? 8787);
+function parsePositiveIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw || !raw.trim()) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    console.warn(`[config] ${name}=${raw} is invalid, falling back to ${fallback}`);
+    return fallback;
+  }
+  return Math.floor(parsed);
+}
+
+const port = parsePositiveIntEnv("PORT", 8787);
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN ?? "";
 const telegramWebhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
 const lineChannelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "";
@@ -30,17 +41,20 @@ const workspace = process.env.DEFAULT_WORKSPACE ?? "maiecho-prod";
 const defaultAgentName = process.env.DEFAULT_AGENT ?? "ops-agent";
 const ollamaBaseUrl = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
 const ollamaModel = process.env.OLLAMA_MODEL ?? "gpt-oss:20b";
-const ollamaTimeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS ?? 12000);
+const ollamaTimeoutMs = parsePositiveIntEnv("OLLAMA_TIMEOUT_MS", 12_000);
+const upstreamRetryMaxAttempts = parsePositiveIntEnv("UPSTREAM_RETRY_MAX_ATTEMPTS", 2);
+const upstreamRetryBaseDelayMs = parsePositiveIntEnv("UPSTREAM_RETRY_BASE_DELAY_MS", 200);
 const heartbeatIntervalMs = parseHeartbeatInterval(process.env.HEARTBEAT_INTERVAL_MS, 10_000);
-const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES ?? 1024 * 1024);
-const MAX_MEMORY_FILE_READ_BYTES = Number(process.env.MAX_MEMORY_FILE_READ_BYTES ?? 256 * 1024);
+const MAX_BODY_BYTES = parsePositiveIntEnv("MAX_BODY_BYTES", 1024 * 1024);
+const MAX_MEMORY_FILE_READ_BYTES = parsePositiveIntEnv("MAX_MEMORY_FILE_READ_BYTES", 256 * 1024);
+const taskRunnerIntervalMs = parsePositiveIntEnv("TASK_RUNNER_INTERVAL_MS", 2_000);
 
 if (!telegramToken) console.warn("TELEGRAM_BOT_TOKEN is empty: telegram sendReply will fail");
 if (!lineChannelAccessToken) console.warn("LINE_CHANNEL_ACCESS_TOKEN is empty: line sendReply will fail");
 if (!anythingApiKey) console.warn("ANYTHINGLLM_API_KEY is empty: brain calls will fail");
 
 startHeartbeat(heartbeatIntervalMs);
-startJobRunner(Number(process.env.TASK_RUNNER_INTERVAL_MS ?? 2000));
+startJobRunner(taskRunnerIntervalMs);
 
 const connector = new TelegramConnector({
   botToken: telegramToken,
@@ -59,12 +73,16 @@ const lineConnector = new LineConnector({
 const brain = new AnythingLlmClient({
   baseUrl: anythingBaseUrl,
   apiKey: anythingApiKey,
+  maxRetries: Math.max(0, upstreamRetryMaxAttempts - 1),
+  retryBaseDelayMs: upstreamRetryBaseDelayMs,
 });
 
 const ollama = new OllamaClient({
   baseUrl: ollamaBaseUrl,
   model: ollamaModel,
   timeoutMs: ollamaTimeoutMs,
+  maxRetries: Math.max(0, upstreamRetryMaxAttempts - 1),
+  retryBaseDelayMs: upstreamRetryBaseDelayMs,
 });
 
 
@@ -281,7 +299,8 @@ const server = createServer(async (req, res) => {
     } catch (error) {
       res.statusCode = 400;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ ok: false, error: sanitizePublicError(error, "讀取記憶檔案失敗") }));
+      const publicError = buildPublicError(error, "讀取記憶檔案失敗", "MEMORY_FILE_READ_FAILED");
+      res.end(JSON.stringify({ ok: false, error: publicError.message, error_code: publicError.code }));
       return;
     }
   }
@@ -315,7 +334,8 @@ const server = createServer(async (req, res) => {
     } catch (error) {
       res.statusCode = 400;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ ok: false, error: sanitizePublicError(error, "固定工作流程執行失敗") }));
+      const publicError = buildPublicError(error, "固定工作流程執行失敗", "MEMORY_WORKFLOW_FAILED");
+      res.end(JSON.stringify({ ok: false, error: publicError.message, error_code: publicError.code }));
       return;
     }
   }
@@ -355,7 +375,8 @@ const server = createServer(async (req, res) => {
     } catch (error) {
       res.statusCode = 400;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ ok: false, error: sanitizePublicError(error, "記憶寫入失敗") }));
+      const publicError = buildPublicError(error, "記憶寫入失敗", "MEMORY_WRITE_FAILED");
+      res.end(JSON.stringify({ ok: false, error: publicError.message, error_code: publicError.code }));
       return;
     }
   }
@@ -374,7 +395,8 @@ const server = createServer(async (req, res) => {
     } catch (error) {
       res.statusCode = 400;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ ok: false, error: sanitizePublicError(error, "LanceDB 搜尋失敗") }));
+      const publicError = buildPublicError(error, "LanceDB 搜尋失敗", "MEMORY_SEARCH_FAILED");
+      res.end(JSON.stringify({ ok: false, error: publicError.message, error_code: publicError.code }));
       return;
     }
   }
@@ -391,7 +413,8 @@ const server = createServer(async (req, res) => {
     } catch (error) {
       res.statusCode = 500;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ ok: false, error: sanitizePublicError(error, "初始化失敗") }));
+      const publicError = buildPublicError(error, "初始化失敗", "SYSTEM_INIT_FAILED");
+      res.end(JSON.stringify({ ok: false, error: publicError.message, error_code: publicError.code }));
       return;
     }
   }
@@ -595,7 +618,8 @@ const server = createServer(async (req, res) => {
       console.error("/api/agent/command failed", error);
       res.statusCode = 400;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ ok: false, error: sanitizePublicError(error, "指令執行失敗，請檢查路徑設定或服務狀態") }));
+      const publicError = buildPublicError(error, "指令執行失敗，請檢查路徑設定或服務狀態", "AGENT_COMMAND_FAILED");
+      res.end(JSON.stringify({ ok: false, error: publicError.message, error_code: publicError.code }));
       return;
     }
   }
@@ -816,12 +840,31 @@ async function getOllamaRouteHealth(baseUrl: string): Promise<{ enabled: boolean
 }
 
 
-function sanitizePublicError(error: unknown, fallbackMessage: string): string {
+interface PublicError {
+  message: string;
+  code: string;
+}
+
+function buildPublicError(error: unknown, fallbackMessage: string, fallbackCode: string): PublicError {
   const message = (error as Error)?.message ?? fallbackMessage;
-  if (/text is required|path must be anythingllm or ollama|request body too large|path is required|unsupported memory path|file not found|invalid workflow job|job locked/i.test(message)) {
-    return message;
+
+  if (/request body too large/i.test(message)) {
+    return { message, code: "REQUEST_BODY_TOO_LARGE" };
   }
-  return fallbackMessage;
+  if (/text is required|path is required|path must be anythingllm or ollama|unsupported memory path|invalid workflow job/i.test(message)) {
+    return { message, code: "INVALID_INPUT" };
+  }
+  if (/file not found/i.test(message)) {
+    return { message, code: "NOT_FOUND" };
+  }
+  if (/job locked/i.test(message)) {
+    return { message, code: "JOB_LOCKED" };
+  }
+  if (/AnythingLLM connection failed|Ollama connection failed|Ollama unreachable|fetch failed/i.test(message)) {
+    return { message: fallbackMessage, code: "UPSTREAM_UNAVAILABLE" };
+  }
+
+  return { message: fallbackMessage, code: fallbackCode };
 }
 
 

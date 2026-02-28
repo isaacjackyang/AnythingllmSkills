@@ -56,6 +56,9 @@ npx -v
 - （可選）`TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`
 - （可選）`LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`
 - （可選）`HEARTBEAT_INTERVAL_MS`, `TASK_RUNNER_INTERVAL_MS`
+- （可選）`UPSTREAM_RETRY_MAX_ATTEMPTS`（預設 2，代表最多嘗試 2 次，含第一次）
+- （可選）`UPSTREAM_RETRY_BASE_DELAY_MS`（預設 200ms，線性退避基準）
+- 以上所有 `*_MS` / `*_BYTES` 與 `PORT` 若填入非正整數，Gateway 會在啟動時警告並自動回退到安全預設值（避免錯誤設定造成啟動崩潰）。
 
 ---
 
@@ -87,6 +90,28 @@ node scripts/init_gateway_env.mjs
 
 ```powershell
 .\scripts\start_gateway.ps1
+```
+
+
+### 4.4 啟動後契約煙霧測試（新增）
+
+```bash
+node scripts/smoke_gateway_contract.mjs --base-url http://localhost:8787
+```
+
+用途：快速驗證 `healthz/lifecycle/channels/inference routes/tasks` 的基礎 API 合約是否穩定。
+
+
+### 4.5 Release 檢查表（新增）
+
+```bash
+node scripts/release_checklist.mjs --base-url http://localhost:8787
+```
+
+若你在 CI / pre-release 階段要求 live smoke 必須成功，請加：
+
+```bash
+node scripts/release_checklist.mjs --base-url http://localhost:8787 --require-live
 ```
 
 ---
@@ -241,11 +266,35 @@ Invoke-RestMethod http://localhost:8787/api/channels
 
 - 安全檢視文件：`gateway/SECURITY_REVIEW.md`
 - 新增保護：
+- 依賴降級：AnythingLLM / Ollama 針對連線錯誤與 408/429/5xx 會依設定做有限重試（retry budget）。
   - `MAX_BODY_BYTES`（限制 request body，預設 1MiB）
   - `OLLAMA_TIMEOUT_MS`（限制 Ollama 呼叫逾時，預設 12s）
   - `MAX_MEMORY_FILE_READ_BYTES`（單次記憶檔讀取上限，預設 256KiB）
   - `/api/inference/routes` 不再回傳 Ollama base URL
 
-## 12. 一句總結
+
+## 12. 錯誤碼（error_code）與 Runbook 對照（新增）
+
+部分 API 失敗回應現在會附帶 `error_code`（與 `error` 訊息並存，維持向後相容）：
+
+| error_code | 說明 | 建議處理（Runbook） |
+|---|---|---|
+| `INVALID_INPUT` | 請求參數缺漏或格式錯誤 | 先檢查 request payload/query；再比對 API 文件必填欄位。 |
+| `REQUEST_BODY_TOO_LARGE` | body 超過 `MAX_BODY_BYTES` | 減小請求內容或調整 `MAX_BODY_BYTES`。 |
+| `NOT_FOUND` | 指定資源不存在（如記憶檔案） | 確認 path/id 正確，先查列表再讀取明細。 |
+| `JOB_LOCKED` | 同一 workflow 正在執行中 | 稍後重試，或先確認目前執行中的 job 狀態。 |
+| `UPSTREAM_UNAVAILABLE` | 上游服務（AnythingLLM/Ollama）不可達 | 檢查 base URL、API key、網路連線與服務健康狀態。 |
+| `AGENT_COMMAND_FAILED` | agent command 流程失敗（通用） | 先看 `error` 文案，再對照 route/path/channel 設定。 |
+| `SYSTEM_INIT_FAILED` | 系統初始化流程失敗 | 重跑 `/api/system/init` 並檢查 node/python/pip 依賴。 |
+| `MEMORY_FILE_READ_FAILED` | 記憶檔讀取失敗（通用） | 檢查檔案權限、路徑、檔案大小與副檔名。 |
+| `MEMORY_WORKFLOW_FAILED` | 固定工作流程執行失敗（通用） | 檢查 workflow name 與 script 執行環境。 |
+| `MEMORY_WRITE_FAILED` | 記憶寫入失敗（通用） | 檢查 memory namespace、存取權限、LanceDB 狀態。 |
+| `MEMORY_SEARCH_FAILED` | 記憶搜尋失敗（通用） | 檢查 LanceDB 相依、query 參數與後端連線。 |
+
+> 建議 on-call 流程：先看 `error_code` 判斷分類，再看 `error` 文案定位細節。
+
+---
+
+## 13. 一句總結
 
 Gateway 的核心價值是把 AI 執行變成「可觀測、可控、可回放」的服務，不只是聊天 API 代理。
