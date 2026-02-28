@@ -10,8 +10,12 @@ async function executeTask(task: TaskRecord): Promise<Record<string, unknown>> {
     throw new Error("simulated task failure from payload.fail=true");
   }
 
+  // TODO: implement real task execution based on task.name / task.payload
+  console.warn(`[job_runner] task ${task.id} (${task.name}): real execution not implemented, completed as no-op`);
+
   return {
     ok: true,
+    warning: "no-op execution: real task handler not yet implemented",
     task_id: task.id,
     name: task.name,
     processed_at: new Date().toISOString(),

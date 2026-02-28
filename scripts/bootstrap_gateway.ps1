@@ -52,7 +52,7 @@ function Fail([string]$Message) {
 }
 
 function Show-Usage {
-@"
+  @"
 Usage:
   .\scripts\bootstrap_gateway.ps1 [options]
 
@@ -67,13 +67,17 @@ Options:
 }
 
 function Get-EnvTemplate {
-@"
+  @"
 # Gateway basic
 PORT=8787
+GATEWAY_API_KEY=
 DEFAULT_WORKSPACE=maiecho-prod
 DEFAULT_AGENT=ops-agent
 HEARTBEAT_INTERVAL_MS=10000
 SOUL_ROLE=gateway
+SOUL_THINKING_STRATEGY=compositional_generalization
+RATE_LIMIT_PER_MINUTE=60
+MAX_CONVERSATION_TURNS=20
 
 # AnythingLLM (required for brain calls)
 ANYTHINGLLM_BASE_URL=http://localhost:3001
@@ -108,7 +112,8 @@ function Show-FinalSummary {
     foreach ($entry in $CheckSummary) {
       Write-Host "  - $entry"
     }
-  } else {
+  }
+  else {
     Write-Host "Checks completed: (none)"
   }
 
@@ -117,7 +122,8 @@ function Show-FinalSummary {
     foreach ($entry in $InstallSummary) {
       Write-Host "  - $entry"
     }
-  } else {
+  }
+  else {
     Write-Host "Actions/installs performed: none"
   }
 
@@ -180,7 +186,8 @@ try {
     Log "package.json not found; initializing npm project..."
     Invoke-CheckedCommand "npm" @("init", "-y")
     Add-InstallSummary "Initialized npm project (npm init -y)"
-  } else {
+  }
+  else {
     Add-CheckSummary "package.json already exists"
   }
 
@@ -191,7 +198,17 @@ try {
     Invoke-CheckedCommand "npx" @("tsx", "--version")
     Add-InstallSummary "Installed/updated dev tools: typescript, tsx, @types/node"
     Log "TypeScript + tsx ready"
-  } else {
+
+    if ($null -eq (Get-Command "pm2" -ErrorAction SilentlyContinue)) {
+      Log "Installing PM2 for process management..."
+      Invoke-CheckedCommand "npm" @("install", "-g", "pm2", "pm2-windows-startup")
+      Add-InstallSummary "Installed global tools: pm2, pm2-windows-startup"
+    }
+    else {
+      Add-CheckSummary "PM2 is already installed"
+    }
+  }
+  else {
     Warn "Skipping TypeScript tooling install (-SkipTooling)."
     Add-CheckSummary "Skipped tooling installation by request (-SkipTooling)"
   }
@@ -203,16 +220,19 @@ try {
       try {
         Invoke-CheckedCommand "node" @($initScript)
         Add-InstallSummary "Checked/installed LanceDB dependencies via scripts/init_gateway_env.mjs"
-      } catch {
+      }
+      catch {
         Warn "LanceDB dependency bootstrap failed: $($_.Exception.Message)"
         Warn "Memory APIs may be unavailable until LanceDB dependencies are installed."
         Add-CheckSummary "LanceDB bootstrap attempted but failed"
       }
-    } else {
+    }
+    else {
       Warn "LanceDB init script not found: $initScript"
       Add-CheckSummary "LanceDB init script missing"
     }
-  } else {
+  }
+  else {
     Warn "Skipping LanceDB dependency check/install (-SkipLanceDb)."
     Add-CheckSummary "Skipped LanceDB dependency bootstrap by request (-SkipLanceDb)"
   }
@@ -220,7 +240,8 @@ try {
   if (Test-Path $ResolvedEnvFile) {
     Warn "$ResolvedEnvFile already exists; keep existing file."
     Add-CheckSummary "Env file already exists: $ResolvedEnvFile"
-  } else {
+  }
+  else {
     Get-EnvTemplate | Set-Content -Path $ResolvedEnvFile -Encoding UTF8
     Add-InstallSummary "Created env template file: $ResolvedEnvFile"
     Log "Wrote env template: $ResolvedEnvFile"
@@ -229,7 +250,8 @@ try {
   if (Test-Path $ResolvedStartScriptFile) {
     Warn "$ResolvedStartScriptFile already exists; keep existing file."
     Add-CheckSummary "Start script already exists: $ResolvedStartScriptFile"
-  } else {
+  }
+  else {
     $startScriptDirectory = Split-Path -Parent $ResolvedStartScriptFile
     if (-not [string]::IsNullOrWhiteSpace($startScriptDirectory) -and -not (Test-Path $startScriptDirectory)) {
       New-Item -Path $startScriptDirectory -ItemType Directory -Force | Out-Null

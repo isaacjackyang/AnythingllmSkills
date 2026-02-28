@@ -243,6 +243,23 @@ export async function markPendingActionExecuted(actionId: string): Promise<Pendi
   });
 }
 
+export async function expireStalePendingActions(): Promise<number> {
+  return withLock(async () => {
+    const db = await readDb();
+    const now = new Date();
+    let count = 0;
+    for (const action of db.actions) {
+      if (action.status === "pending" && isExpired(action, now)) {
+        action.status = "expired";
+        action.updated_at = now.toISOString();
+        count += 1;
+      }
+    }
+    if (count > 0) await writeDb(db);
+    return count;
+  });
+}
+
 export async function resetPendingActionsDbForTest(): Promise<void> {
   await withLock(async () => {
     await rm(DB_PATH, { force: true });

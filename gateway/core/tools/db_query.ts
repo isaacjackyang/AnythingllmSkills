@@ -4,10 +4,6 @@ export interface DbQueryInput {
   sql: string;
 }
 
-export async function runDbQuery(input: DbQueryInput): Promise<{ rows: unknown[] }> {
-  if (!READ_ONLY_SQL.test(input.sql)) {
-    throw new Error("only read-only SELECT queries are permitted");
-  }
-
-  return { rows: [] };
+export async function runDbQuery(_input: DbQueryInput): Promise<never> {
+  throw new Error("db_query tool is not yet implemented. Configure a database connection to enable this tool.");
 }
