@@ -196,47 +196,30 @@
         cursor: pointer;
       }
 
-      .stage canvas {
-        width: 100%;
+      .stage-agent-panel {
         height: 100%;
-        display: block;
+        display: flex;
+        flex-direction: column;
+        gap: 0.7rem;
+        padding: 0.8rem;
       }
 
-      .stage-controls {
-        position: absolute;
-        top: 1.05rem;
-        left: 0.65rem;
-        right: 0.65rem;
+      .stage-agent-panel h2 {
+        margin: 0;
+        font-size: 0.95rem;
+      }
+
+      .stage-agent-panel p {
+        margin: 0;
+        color: #cbd5e1;
+        font-size: 0.82rem;
+        line-height: 1.45;
+      }
+
+      .stage-agent-actions {
         display: flex;
-        align-items: center;
-        justify-content: flex-start;
         gap: 0.5rem;
         flex-wrap: wrap;
-        z-index: 2;
-      }
-
-      .upload-label {
-        border: 1px solid rgba(125, 211, 252, 0.45);
-        background: rgba(15, 23, 42, 0.72);
-        border-radius: 8px;
-        padding: 0.32rem 0.55rem;
-        font-size: 0.74rem;
-        color: #bfdbfe;
-        cursor: pointer;
-      }
-
-      .upload-label input {
-        display: none;
-      }
-
-      .motion-btn {
-        border: 1px solid rgba(125, 211, 252, 0.45);
-        background: rgba(15, 23, 42, 0.72);
-        color: #bae6fd;
-        border-radius: 8px;
-        padding: 0.32rem 0.55rem;
-        font-size: 0.74rem;
-        cursor: pointer;
       }
 
       .status {
@@ -674,17 +657,21 @@
   <body>
     <main class="panel">
       <section class="stage-shell" aria-label="左側工作區">
-        <section class="stage" aria-label="Pixel Agent 動畫區" data-collapsible data-collapsible-label="助手動畫區">
-          <div class="stage-controls">
-            <span class="upload-label">Pixel Agent 動畫（GitHub sprite 風格）</span>
-            <button id="motionToggle" class="motion-btn" type="button">暫停動作</button>
-            <button id="pauseAndClearStage" class="motion-btn" type="button">暫停並清畫面</button>
-            <button id="spriteGenderToggle" class="motion-btn" type="button">切換為男生</button>
+        <section class="stage" aria-label="Agent 管理快捷區" data-collapsible data-collapsible-label="Agent 管理快捷區">
+          <div class="stage-agent-panel">
+            <h2>Agent 管理快捷區</h2>
+            <p>已移除助手動畫，改由 Agent 管理資訊取代。可直接在此快速控制 Agent 執行狀態。</p>
+            <div class="stage-agent-actions">
+              <button id="quickStartAgent" class="ctrl-btn" type="button">啟動 Agent</button>
+              <button id="quickPauseAgent" class="ctrl-btn" type="button">暫停任務</button>
+              <button id="quickResumeAgent" class="ctrl-btn" type="button">恢復任務</button>
+              <button id="quickStopAgent" class="ctrl-btn stop" type="button">停止 Agent</button>
+            </div>
+            <pre id="quickAgentSummary" class="console-log" style="min-height: 160px;">[agent] 等待載入 Agent 狀態...</pre>
           </div>
-          <canvas id="motionCanvas" width="960" height="640" role="img" aria-label="Pixel Agent 像素角色動畫"></canvas>
         </section>
 
-        <div id="stageResizer" class="resizer stage-shell-resizer" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="調整助手動畫區與 Agent 對話輸入框高度"></div>
+        <div id="stageResizer" class="resizer stage-shell-resizer" role="separator" aria-orientation="horizontal" tabindex="0" aria-label="調整 Agent 管理快捷區與 Agent 對話輸入框高度"></div>
 
         <section class="stage-chat" aria-label="指令對話框" data-collapsible data-collapsible-label="Agent 對話輸入框">
           <h2 style="margin:0;font-size:0.92rem;">Agent 對話輸入框</h2>
@@ -919,17 +906,17 @@
       const runWorkflowBtn = document.getElementById('runWorkflowBtn');
       const workflowResult = document.getElementById('workflowResult');
       const flowSvg = document.getElementById('flowSvg');
-      const motionToggle = document.getElementById('motionToggle');
-      const pauseAndClearStageBtn = document.getElementById('pauseAndClearStage');
-      const spriteGenderToggle = document.getElementById('spriteGenderToggle');
       const chatForm = document.getElementById('chatForm');
       const chatPath = document.getElementById('chatPath');
       const chatInput = document.getElementById('chatInput');
       const chatSend = document.getElementById('chatSend');
       const inferenceRouteStatus = document.getElementById('inferenceRouteStatus');
       const chatLog = document.getElementById('chatLog');
-      const motionCanvas = document.getElementById('motionCanvas');
-      const motionCtx = motionCanvas.getContext('2d');
+      const quickStartAgent = document.getElementById('quickStartAgent');
+      const quickPauseAgent = document.getElementById('quickPauseAgent');
+      const quickResumeAgent = document.getElementById('quickResumeAgent');
+      const quickStopAgent = document.getElementById('quickStopAgent');
+      const quickAgentSummary = document.getElementById('quickAgentSummary');
       const panelEl = document.querySelector('.panel');
       const dashboardEl = document.querySelector('.dashboard');
       const stageShellEl = document.querySelector('.stage-shell');
@@ -1037,8 +1024,6 @@
         });
       };
 
-      let runningMotion = true;
-
       initializeResizableBlocks();
       initializeCollapsibleBlocks();
       initializeSortableGrid('.metric-grid', '.metric');
@@ -1068,323 +1053,12 @@
       let controlApiConnected = false;
       let channelsApiConnected = false;
       let cachedTasks = [];
-      let animationModeOverrideUntil = 0;
-      let animationMode = 'sleep';
-      let spriteGender = 'female';
       if (workflowDateInput && !workflowDateInput.value) {
         const now = new Date();
         workflowDateInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       }
       let selectedInferencePath = 'anythingllm';
       let inferenceRoutesState = null;
-
-      const pixelSize = 8;
-      const agentPalette = {
-        skin: '#f8d4b6',
-        skinShadow: '#e6b892',
-        hair: '#3b2f2f',
-        hairDark: '#1f1714',
-        eye: '#111827',
-        mouth: '#e11d48',
-        dress: '#ec4899',
-        dressShade: '#be185d',
-        sleeve: '#f9a8d4',
-        legs: '#f2c19a',
-        heel: '#111827',
-        outline: '#020617',
-        glow: '#38bdf8',
-      };
-
-
-      const maleAgentPalette = {
-        ...agentPalette,
-        hair: '#312e81',
-        hairDark: '#1e1b4b',
-        mouth: '#b91c1c',
-        dress: '#2563eb',
-        dressShade: '#1d4ed8',
-        sleeve: '#93c5fd',
-        legs: '#334155',
-        heel: '#0f172a',
-      };
-
-      const drawPixelRect = (x, y, w, h, color) => {
-        if (!color) return;
-        motionCtx.fillStyle = color;
-        motionCtx.fillRect(
-          Math.round(x) * pixelSize,
-          Math.round(y) * pixelSize,
-          Math.max(1, Math.round(w)) * pixelSize,
-          Math.max(1, Math.round(h)) * pixelSize,
-        );
-      };
-
-      const drawPixelAgent = (anchorX, anchorY, frame, gender) => {
-        const px = (ox, oy, w, h, color) => drawPixelRect(anchorX + ox, anchorY + oy, w, h, color);
-        const palette = gender === 'male' ? maleAgentPalette : agentPalette;
-
-        const bodyBob = Math.round(frame.bodyBob);
-        const armSwing = Math.round(frame.armSwing);
-        const legSwing = Math.round(frame.legSwing);
-        const mouthOpen = Math.max(0, Math.round(frame.mouthOpen));
-
-        const y = bodyBob;
-        const leftLegStep = Math.max(0, legSwing);
-        const rightLegStep = Math.max(0, -legSwing);
-
-        // 頭髮
-        if (gender === 'male') {
-          px(7, 1 + y, 8, 1, palette.hairDark);
-          px(6, 2 + y, 10, 2, palette.hair);
-          px(7, 4 + y, 8, 1, palette.hairDark);
-        } else {
-          px(7, 1 + y, 8, 1, palette.hairDark);
-          px(6, 2 + y, 10, 2, palette.hair);
-          px(6, 4 + y, 2, 8, palette.hairDark);
-          px(14, 4 + y, 2, 8, palette.hairDark);
-        }
-
-        // 臉部
-        px(8, 3 + y, 6, 5, palette.skin);
-        px(8, 8 + y, 6, 1, palette.skinShadow);
-        px(8, 3 + y, 1, 6, palette.outline);
-        px(13, 3 + y, 1, 6, palette.outline);
-
-        // 五官
-        px(9, 5 + y, 1, 1, palette.eye);
-        px(12, 5 + y, 1, 1, palette.eye);
-        px(10, 7 + y, 2, 1 + mouthOpen, palette.mouth);
-
-        // 肩膀與洋裝上身
-        px(8, 9 + y, 6, 1, palette.sleeve);
-        px(8, 10 + y, 6, 2, palette.dress);
-
-        // 手臂
-        px(6 - armSwing, 10 + y, 2, 2, palette.sleeve);
-        px(5 - armSwing, 12 + y, 2, 3, palette.skin);
-        px(14 + armSwing, 10 + y, 2, 2, palette.sleeve);
-        px(15 + armSwing, 12 + y, 2, 3, palette.skin);
-
-        // 洋裝裙襬（A-line）
-        px(7, 12 + y, 8, 2, palette.dress);
-        px(6, 14 + y, 10, 2, palette.dress);
-        px(5, 16 + y, 12, 2, palette.dressShade);
-
-        // 雙腿（修復：腿明確畫在裙襬下方）
-        px(8, 18 + y, 2, 3 + leftLegStep, palette.legs);
-        px(12, 18 + y, 2, 3 + rightLegStep, palette.legs);
-
-        // 高跟鞋
-        px(8, 21 + y + leftLegStep, 2, 1, palette.heel);
-        px(12, 21 + y + rightLegStep, 2, 1, palette.heel);
-        px(9, 22 + y + leftLegStep, 2, 1, palette.heel);
-        px(13, 22 + y + rightLegStep, 2, 1, palette.heel);
-
-        // 輪廓強化
-        px(5, 16 + y, 1, 7, palette.outline);
-        px(16, 16 + y, 1, 7, palette.outline);
-      };
-
-      const drawSpeechBubble = (x, y, text, pulse) => {
-        motionCtx.save();
-        motionCtx.fillStyle = 'rgba(15, 23, 42, 0.88)';
-        motionCtx.strokeStyle = 'rgba(103, 232, 249, 0.9)';
-        motionCtx.lineWidth = 2;
-        motionCtx.beginPath();
-        motionCtx.roundRect(x, y, 220, 72, 12);
-        motionCtx.fill();
-        motionCtx.stroke();
-
-        motionCtx.fillStyle = '#a5f3fc';
-        motionCtx.font = '700 18px "Noto Sans TC", sans-serif';
-        motionCtx.fillText(text, x + 16, y + 43);
-
-        motionCtx.fillStyle = `rgba(56, 189, 248, ${0.25 + pulse * 0.2})`;
-        motionCtx.beginPath();
-        motionCtx.arc(x + 210, y + 16, 6 + pulse * 3, 0, Math.PI * 2);
-        motionCtx.fill();
-        motionCtx.restore();
-      };
-
-      const drawThoughtBubble = (x, y, pulse) => {
-        motionCtx.save();
-        motionCtx.fillStyle = 'rgba(148, 163, 184, 0.18)';
-        motionCtx.strokeStyle = 'rgba(191, 219, 254, 0.85)';
-        motionCtx.lineWidth = 2;
-        motionCtx.beginPath();
-        motionCtx.ellipse(x, y, 80 + pulse * 8, 34 + pulse * 4, 0, 0, Math.PI * 2);
-        motionCtx.fill();
-        motionCtx.stroke();
-
-        motionCtx.beginPath();
-        motionCtx.arc(x - 72, y + 34, 9, 0, Math.PI * 2);
-        motionCtx.fill();
-        motionCtx.stroke();
-
-        motionCtx.beginPath();
-        motionCtx.arc(x - 90, y + 50, 6, 0, Math.PI * 2);
-        motionCtx.fill();
-        motionCtx.stroke();
-
-        motionCtx.fillStyle = '#dbeafe';
-        motionCtx.font = '700 16px "Noto Sans TC", sans-serif';
-        motionCtx.fillText('分析中...', x - 42, y + 6);
-        motionCtx.restore();
-      };
-
-      const resolveAnimationState = (timestamp) => {
-        const seconds = timestamp / 1000;
-        const phase = seconds % 18;
-
-        const buildState = (mode, t) => {
-          if (mode === 'sleep') {
-            return {
-              mode: 'sleep',
-              stageText: '未連接・睡眠待命',
-              horizontalShift: 0,
-              bodyBob: Math.sin(t * 0.8) * 0.2,
-              armSwing: 0,
-              legSwing: 0,
-              mouthOpen: 0,
-              pulse: (Math.sin(t * 0.4) + 1) / 2,
-            };
-          }
-
-          if (mode === 'talk') {
-            return {
-              mode: 'talk',
-              stageText: '對話回覆中',
-              horizontalShift: 0,
-              bodyBob: Math.sin(t * 0.35) * 0.6,
-              armSwing: 1 + Math.sin(t) * 1.2,
-              legSwing: 0,
-              mouthOpen: (Math.sin(t) + 1) * 0.9,
-              pulse: (Math.sin(t * 0.8) + 1) / 2,
-            };
-          }
-
-          if (mode === 'think') {
-            return {
-              mode: 'think',
-              stageText: '分析與規劃中',
-              horizontalShift: Math.sin(t * 0.45) * 1.5,
-              bodyBob: Math.sin(t * 0.6) * 0.5,
-              armSwing: -1,
-              legSwing: 0,
-              mouthOpen: 0,
-              pulse: (Math.sin(t) + 1) / 2,
-            };
-          }
-
-          if (mode === 'paused' || mode === 'stopped') {
-            return {
-              mode: 'idle',
-              stageText: mode === 'paused' ? '任務暫停' : '任務停止',
-              horizontalShift: 0,
-              bodyBob: Math.sin(t * 0.7) * 0.15,
-              armSwing: 0,
-              legSwing: 0,
-              mouthOpen: 0,
-              pulse: (Math.sin(t * 0.5) + 1) / 2,
-            };
-          }
-
-          if (mode === 'running') {
-            return {
-              mode: 'walk',
-              stageText: '執行任務中',
-              horizontalShift: Math.sin(t * 0.7) * 2.8,
-              bodyBob: Math.sin(t * 3.2) * 0.8,
-              armSwing: Math.sin(t * 3.2) * 1.8,
-              legSwing: Math.sin(t * 3.2 + Math.PI) * 1.6,
-              mouthOpen: 0,
-              pulse: (Math.sin(t * 3.2) + 1) / 2,
-            };
-          }
-
-          return {
-            mode: 'idle',
-            stageText: '待命中',
-            horizontalShift: Math.sin(phase * 0.35) * 0.6,
-            bodyBob: Math.sin(t * 0.9) * 0.25,
-            armSwing: Math.sin(t * 0.6) * 0.35,
-            legSwing: 0,
-            mouthOpen: 0,
-            pulse: (Math.sin(t * 0.5) + 1) / 2,
-          };
-        };
-
-        return buildState(animationMode, seconds);
-      };
-      motionToggle.addEventListener('click', () => {
-        runningMotion = !runningMotion;
-        motionToggle.textContent = runningMotion ? '暫停動作' : '繼續動作';
-        if (runningMotion) {
-          requestAnimationFrame(renderMotion);
-        }
-      });
-
-      const clearStageCanvas = () => {
-        motionCtx.clearRect(0, 0, motionCanvas.width, motionCanvas.height);
-        motionCtx.fillStyle = '#020617';
-        motionCtx.fillRect(0, 0, motionCanvas.width, motionCanvas.height);
-      };
-
-      pauseAndClearStageBtn.addEventListener('click', () => {
-        runningMotion = false;
-        motionToggle.textContent = '繼續動作';
-        clearStageCanvas();
-        appendLog('[stage] 已暫停 Pixel Agent 動畫並清除左側畫面');
-      });
-
-      spriteGenderToggle?.addEventListener('click', () => {
-        spriteGender = spriteGender === 'female' ? 'male' : 'female';
-        spriteGenderToggle.textContent = spriteGender === 'female' ? '切換為男生' : '切換為女生';
-      });
-
-      const renderMotion = (timestamp) => {
-        motionCtx.clearRect(0, 0, motionCanvas.width, motionCanvas.height);
-
-        const gradient = motionCtx.createLinearGradient(0, 0, motionCanvas.width, motionCanvas.height);
-        gradient.addColorStop(0, '#f3f4f6');
-        gradient.addColorStop(1, '#d1d5db');
-        motionCtx.fillStyle = gradient;
-        motionCtx.fillRect(0, 0, motionCanvas.width, motionCanvas.height);
-
-        const state = resolveAnimationState(timestamp);
-        const spriteWidthCells = 24;
-        const spriteHeightCells = 28;
-        const canvasWidthCells = motionCanvas.width / pixelSize;
-        const canvasHeightCells = motionCanvas.height / pixelSize;
-
-        const baseCellX = Math.floor(((canvasWidthCells - spriteWidthCells) / 2) + state.horizontalShift);
-        const baseCellY = Math.floor(((canvasHeightCells - spriteHeightCells) / 2) + 2);
-        const basePixelX = baseCellX * pixelSize;
-        const basePixelY = baseCellY * pixelSize;
-
-        drawPixelAgent(baseCellX, baseCellY, state, spriteGender);
-
-        motionCtx.fillStyle = '#94a3b8';
-        motionCtx.font = '600 18px "Noto Sans TC", sans-serif';
-        motionCtx.fillText(`Pixel Agent ${spriteGender === 'female' ? '女生' : '男生'}（${state.stageText}）`, 80, 56);
-
-        motionCtx.fillStyle = `rgba(56, 189, 248, ${0.22 + state.pulse * 0.3})`;
-        motionCtx.beginPath();
-        motionCtx.ellipse(basePixelX + (12 * pixelSize), basePixelY + (28 * pixelSize) + 14, 74 + state.pulse * 16, 18, 0, 0, Math.PI * 2);
-        motionCtx.fill();
-
-        if (state.mode === 'talk') {
-          drawSpeechBubble(basePixelX + 190, basePixelY + 30, '正在回答你的問題', state.pulse);
-        } else if (state.mode === 'think') {
-          drawThoughtBubble(basePixelX + 216, basePixelY - 8, state.pulse);
-        }
-
-        if (runningMotion) {
-          requestAnimationFrame(renderMotion);
-        }
-      };
-
-      requestAnimationFrame(renderMotion);
 
       const toLocalTime = (iso) => {
         if (!iso) return '--:--:--';
@@ -1617,38 +1291,6 @@
         `;
       };
 
-      const setAnimationMode = (nextMode, durationMs = 0) => {
-        animationMode = nextMode;
-        animationModeOverrideUntil = durationMs > 0 ? Date.now() + durationMs : 0;
-      };
-
-      const syncAnimationWithControlState = (controlState) => {
-        if (Date.now() < animationModeOverrideUntil) return;
-        if (!controlApiConnected) {
-          setAnimationMode('sleep');
-          return;
-        }
-
-        const runState = controlState?.state;
-
-        if (runState === 'paused') {
-          setAnimationMode('paused');
-          return;
-        }
-
-        if (runState === 'running') {
-          setAnimationMode('running');
-          return;
-        }
-
-        if (runState === 'stopped') {
-          setAnimationMode('stopped');
-          return;
-        }
-
-        setAnimationMode('idle');
-      };
-
       const setControlButtons = ({ start, pause, resume, stop }) => {
         button.disabled = !start;
         pauseBtn.disabled = !pause;
@@ -1662,6 +1304,15 @@
         executionStatus.textContent = data.execution_status;
         taskProgress.textContent = `${data.task_progress}%`;
         lastUpdated.textContent = toLocalTime(data.last_updated_at);
+        if (quickAgentSummary) {
+          quickAgentSummary.textContent = JSON.stringify({
+            agent_id: selectedAgentId,
+            assistant_status: data.assistant_status,
+            execution_status: data.execution_status,
+            task_progress: data.task_progress,
+            last_updated_at: data.last_updated_at,
+          }, null, 2);
+        }
 
         setControlButtons({
           start: Boolean(data.can?.start),
@@ -1669,7 +1320,6 @@
           resume: Boolean(data.can?.resume),
           stop: Boolean(data.can?.stop),
         });
-        syncAnimationWithControlState(data);
         renderFlow(data);
       };
 
@@ -1978,7 +1628,6 @@
       };
 
       const sendCommand = async (text, path) => {
-        setAnimationMode('think', 2200);
         const response = await fetch('/api/agent/command', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1988,7 +1637,6 @@
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || '發送指令失敗');
         }
-        setAnimationMode('talk', 2800);
         return payload;
       };
 
@@ -2400,6 +2048,11 @@
         },
       });
 
+      quickStartAgent?.addEventListener('click', () => button.click());
+      quickPauseAgent?.addEventListener('click', () => pauseBtn.click());
+      quickResumeAgent?.addEventListener('click', () => resumeBtn.click());
+      quickStopAgent?.addEventListener('click', () => stopBtn.click());
+
       Promise.all([refreshAgents({ keepSelection: false }), refreshChannels(), refreshInferenceRoutes(), refreshMemoryFiles()])
         .then(async () => {
           controlApiConnected = true;
@@ -2417,7 +2070,6 @@
           controlApiConnected = false;
           channelsApiConnected = false;
           setControlButtons({ start: false, pause: false, resume: false, stop: false });
-          setAnimationMode('sleep');
           status.textContent = `無法連線控制 API：${error.message}`;
           appendLog(`[error] 無法連線控制 API：${error.message}`);
           renderChannelsDisconnected('初始連線失敗');
