@@ -14,7 +14,8 @@ Gateway 做的事情不是「替代 LLM」，而是把 LLM 的能力包進可治
 3. 呼叫 AnythingLLM client 取得提案與回覆。
 4. 套用 policy 與控制狀態（agent control / channel control）。
 5. 分派工具與任務（含 queue job + task runner）。
-6. 回傳結果並保留可追蹤資訊。
+6. 以 Agent Registry 管理多 Agent 設定（模型 / soul / 任務板 / 記憶命名空間）。
+7. 回傳結果並保留可追蹤資訊。
 
 ---
 
@@ -117,22 +118,26 @@ Invoke-RestMethod http://localhost:8787/api/channels
 - `POST /lifecycle/soul`
 
 ### 控制面
-- `GET /api/agent/control`
+- `GET /api/agents`（列出主 Agent + 子 Agent）
+- `POST /api/agents`（新增 Agent：name/model/soul/communication_mode）
+- `PATCH /api/agents/:id`（更新 Agent profile）
+- `GET /api/agent/communications`（查看 Agent 間通信拓樸）
+- `GET /api/agent/control?agent_id=`
 - `GET /api/inference/routes`（回傳 anythingllm/ollama 路徑可用性與模型資訊，並同步回報 Ollama 可達性檢查結果）
-- `POST /api/agent/control`（`start|pause|resume|stop`）
+- `POST /api/agent/control`（`start|pause|resume|stop`，可帶 `agent_id`）
 - `GET /api/channels`
 - `GET /api/memory/files`（列出可檢視的記憶 Markdown 檔案）
 - `GET /api/memory/file?path=...`（讀取指定記憶檔內容）
 - `GET /api/memory/workflows`（列出可執行固定流程）
 - `POST /api/memory/workflows/run`（執行固定流程：microsync / daily-wrapup / weekly-compound）
 - `GET /api/memory/architecture`（回傳 LDB 七層混合檢索架構快照）
-- `POST /api/memory/learn`（手動寫入 Agent 經驗：踩坑/方法論/決策）
+- `POST /api/memory/learn`（手動寫入 Agent 經驗：踩坑/方法論/決策，可帶 `agent_id`，寫入對應 memory namespace）
 - `GET /api/memory/search?q=...&limit=`（走 LanceDB 搜尋 Agent 長期記憶）
 - `POST /api/system/init`（執行初始化檢查與依賴安裝）
 - `POST /api/channels`（channel: `telegram|line|web_ui` + `enabled: boolean`）
 
 ### Web command
-- `POST /api/agent/command`
+- `POST /api/agent/command`（可帶 `agent_id`，讓不同 Agent 以自身 soul/model/記憶執行）
   - `text: string`（可選；若使用 `confirm_token` 可省略）
   - `confirm_token: string`（可選；用於二次確認執行）
   - `path: "anythingllm" | "ollama"`（選填，預設 `anythingllm`）
@@ -146,7 +151,7 @@ Invoke-RestMethod http://localhost:8787/api/channels
   - 驗證 `x-line-signature`
 
 ### Tasks
-- `GET /api/tasks?status=&limit=`
+- `GET /api/tasks?status=&limit=&agent_id=`
 - `GET /api/tasks/:id`
 - `POST /api/tasks/:id/cancel`
 - `DELETE /api/tasks/:id`
@@ -181,6 +186,17 @@ Invoke-RestMethod http://localhost:8787/api/channels
   未通過任一步驟不得執行。
 
 ---
+
+
+## 8.1 多 Agent 通信與資料儲存策略（新增）
+
+- **通信模式**
+  - `hub_and_spoke`：子 Agent 只能透過主 Agent 溝通，適合集中治理與審批。
+  - `direct`：Agent 可彼此直接溝通，適合協作型工作流。
+- **資料儲存隔離**
+  - 任務隊列使用 `agent_id` 標記（`/api/tasks?agent_id=...` 可過濾）。
+  - 記憶寫入附帶 `memory_namespace`，避免不同 Agent 學習內容互相污染。
+  - Agent metadata 由 `gateway/data/agent_registry.json` 持久化，便於重啟後回復拓樸。
 
 ## 8. 常見故障與對應判斷
 

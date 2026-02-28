@@ -13,6 +13,7 @@ export type LearningKind = "pitfall" | "methodology" | "decision";
 
 export interface LearningEntry {
   scope: string;
+  memory_namespace?: string;
   kind: LearningKind;
   title: string;
   summary: string;
@@ -62,7 +63,7 @@ async function upsertLanceDb(entry: LearningEntry, createdAt: string): Promise<v
       scope: entry.scope,
       kind: entry.kind,
       content: `${entry.title}\n${entry.summary}`,
-      metadata: entry.details,
+      metadata: { ...entry.details, memory_namespace: entry.memory_namespace ?? entry.scope },
       created_at: createdAt,
     },
   };

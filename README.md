@@ -32,9 +32,11 @@ flowchart LR
     G --> R[Router + Policy\nintent / rules / control]
     R --> A[AnythingLLM Client]
     R --> O[Ollama Client]
+    R --> AR[Agent Registry\nmodel / soul / comm]
     R --> T[Tools\nshell / http / db / queue]
     R --> J[Task Runner\nworkers/job_runner.ts]
     T --> M[(Memory\nLanceDB + Markdown)]
+    AR --> M
     J --> M
     R --> L[Audit Logger + Lifecycle]
     G --> UI[Approval UI]
@@ -80,8 +82,9 @@ sequenceDiagram
 2. Gateway 建立標準化事件（含 `trace_id`）並記錄 channel activity。
 3. Gateway 呼叫 AnythingLLM client 產生 proposal / 回覆內容。
 4. Router 套用 policy（允許 / 拒絕 / 待審批）。
-5. 工具層（shell/http/db/queue）或 task runner 執行可執行行為。
-6. 回覆透過原通道送出（telegram/line）或回傳給 web UI。
+5. 依 Agent Registry 決定由哪個 Agent（模型/靈魂/記憶）執行。
+6. 工具層（shell/http/db/queue）或 task runner 執行可執行行為，任務以 `agent_id` 隔離。
+7. 回覆透過原通道送出（telegram/line）或回傳給 web UI。
 
 **關鍵觀念**：
 - AnythingLLM 負責「思考與文字」。
@@ -178,7 +181,9 @@ Invoke-RestMethod http://localhost:8787/api/channels
 - `GET /healthz`
 - `GET /lifecycle`
 - `POST /lifecycle/soul`
-- `GET/POST /api/agent/control`
+- `GET/POST /api/agent/control`（支援 `agent_id`）
+- `GET/POST/PATCH /api/agents*`（多 Agent 管理）
+- `GET /api/agent/communications`（Agent 通信拓樸）
 - `GET/POST /api/channels`
 - `POST /api/agent/command`
 - `POST /api/memory/learn`（手動寫入經驗）
@@ -186,7 +191,7 @@ Invoke-RestMethod http://localhost:8787/api/channels
 - `POST /api/system/init`（自動檢查/安裝依賴）
 - `POST /ingress/telegram`
 - `POST /ingress/line`
-- `GET /api/tasks`
+- `GET /api/tasks`（支援 `agent_id` 篩選）
 - `GET /api/tasks/:id`
 - `POST /api/tasks/:id/cancel`
 - `DELETE /api/tasks/:id`
@@ -251,3 +256,17 @@ Invoke-RestMethod http://localhost:8787/api/channels
   1) LanceDB（主檢索）
   2) `memory/recent/agent-learning.md`（UI 可直接看）
 - 可透過 `GET /api/memory/architecture` 檢查七層檢索架構快照。
+
+
+## 12) 多 Agent UI 與資料治理（新增）
+
+- Approval UI 已新增 **Agent 管理區**：
+  - 可新增子 Agent（name/model/soul/communication_mode）。
+  - 可切換目前控制的 Agent，控制面與任務列表都會跟著切換。
+- Agent 間通信支援兩種策略：
+  - `hub_and_spoke`（主 Agent 為匯流排）
+  - `direct`（Agent 彼此直連）
+- 儲存策略：
+  - 任務：寫入 `agent_id`。
+  - 記憶：寫入 `memory_namespace`。
+  - 註冊表：`gateway/data/agent_registry.json`。

@@ -31,3 +31,11 @@ test("agent control rejects invalid transitions", () => {
   assert.throws(() => applyAgentControl("pause"), /invalid action/);
   assert.throws(() => applyAgentControl("resume"), /invalid action/);
 });
+
+test("agent control keeps isolated state per agent", () => {
+  __resetAgentControlForTest("idle", "primary");
+  const first = applyAgentControl("start", "alpha");
+  const second = getAgentControlSnapshot("beta");
+  assert.equal(first.state, "running");
+  assert.equal(second.state, "idle");
+});

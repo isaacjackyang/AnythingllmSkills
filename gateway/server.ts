@@ -17,6 +17,7 @@ import { runQueuedJobsOnce, startJobRunner } from "./workers/job_runner";
 import { decidePendingAction, getPendingActionById, listPendingActions } from "./core/approvals_store";
 import { getLdbArchitectureSnapshot } from "./core/memory/ldb_architecture";
 import { recordLearning, searchLearning } from "./core/memory/evolution";
+import { createAgent, ensurePrimaryAgent, getAgentById, listAgents, updateAgent } from "./core/agents_registry";
 
 const port = Number(process.env.PORT ?? 8787);
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN ?? "";
@@ -26,7 +27,7 @@ const lineChannelSecret = process.env.LINE_CHANNEL_SECRET;
 const anythingBaseUrl = process.env.ANYTHINGLLM_BASE_URL ?? "http://localhost:3001";
 const anythingApiKey = process.env.ANYTHINGLLM_API_KEY ?? "";
 const workspace = process.env.DEFAULT_WORKSPACE ?? "maiecho-prod";
-const agent = process.env.DEFAULT_AGENT ?? "ops-agent";
+const defaultAgentName = process.env.DEFAULT_AGENT ?? "ops-agent";
 const ollamaBaseUrl = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
 const ollamaModel = process.env.OLLAMA_MODEL ?? "gpt-oss:20b";
 const ollamaTimeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS ?? 12000);
@@ -45,14 +46,14 @@ const connector = new TelegramConnector({
   botToken: telegramToken,
   webhookSecretToken: telegramWebhookSecret,
   defaultWorkspace: workspace,
-  defaultAgent: agent,
+  defaultAgent: defaultAgentName,
 });
 
 const lineConnector = new LineConnector({
   channelAccessToken: lineChannelAccessToken,
   channelSecret: lineChannelSecret,
   defaultWorkspace: workspace,
-  defaultAgent: agent,
+  defaultAgent: defaultAgentName,
 });
 
 const brain = new AnythingLlmClient({
@@ -77,6 +78,13 @@ const execFileAsync = promisify(execFile);
 const workflowScriptPath = path.resolve(process.cwd(), "scripts/memory_workflow.js");
 const initGatewayScriptPath = path.resolve(process.cwd(), "scripts/init_gateway_env.mjs");
 
+async function resolveAgentContext(agentId?: string): Promise<{ agent_id: string; agent_name: string; memory_namespace: string }> {
+  const primary = await ensurePrimaryAgent(defaultAgentName, ollamaModel);
+  const resolved = agentId ? await getAgentById(agentId) : primary;
+  if (!resolved) throw new Error("agent not found");
+  return { agent_id: resolved.id, agent_name: resolved.name, memory_namespace: resolved.memory_namespace };
+}
+
 const server = createServer(async (req, res) => {
   if (req.method === "GET" && req.url === "/approval-ui") {
     try {
@@ -93,11 +101,21 @@ const server = createServer(async (req, res) => {
     }
   }
 
-  if (req.method === "GET" && req.url === "/api/agent/control") {
-    res.statusCode = 200;
-    res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ ok: true, data: getAgentControlSnapshot() }));
-    return;
+  if (req.method === "GET" && req.url?.startsWith("/api/agent/control")) {
+    try {
+      const requestUrl = new URL(req.url ?? "/", "http://localhost");
+      const agentId = String(requestUrl.searchParams.get("agent_id") ?? "").trim() || undefined;
+      const context = await resolveAgentContext(agentId);
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true, data: getAgentControlSnapshot(context.agent_id), agent: context }));
+      return;
+    } catch (error) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: (error as Error).message }));
+      return;
+    }
   }
 
   if (req.method === "POST" && req.url === "/api/agent/control") {
@@ -105,10 +123,11 @@ const server = createServer(async (req, res) => {
       const raw = await readBody(req);
       const payload = raw ? JSON.parse(raw) : {};
       const action = payload.action as "start" | "pause" | "resume" | "stop";
-      const data = applyAgentControl(action);
+      const context = await resolveAgentContext(typeof payload.agent_id === "string" ? payload.agent_id : undefined);
+      const data = applyAgentControl(action, context.agent_id);
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ ok: true, data }));
+      res.end(JSON.stringify({ ok: true, data, agent: context }));
       return;
     } catch (error) {
       res.statusCode = 400;
@@ -119,6 +138,83 @@ const server = createServer(async (req, res) => {
   }
 
 
+
+  if (req.method === "GET" && req.url === "/api/agents") {
+    try {
+      await ensurePrimaryAgent(defaultAgentName, ollamaModel);
+      const data = await listAgents();
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true, data }));
+      return;
+    } catch (error) {
+      res.statusCode = 500;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: (error as Error).message }));
+      return;
+    }
+  }
+
+  if (req.method === "POST" && req.url === "/api/agents") {
+    try {
+      const raw = await readBody(req);
+      const payload = raw ? JSON.parse(raw) : {};
+      const name = String(payload.name ?? "").trim();
+      const model = String(payload.model ?? ollamaModel).trim();
+      const soul = String(payload.soul ?? "operations").trim();
+      const communicationMode = payload.communication_mode === "direct" ? "direct" : "hub_and_spoke";
+      if (!name) throw new Error("name is required");
+      const created = await createAgent({ name, model, soul, communication_mode: communicationMode });
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true, data: created }));
+      return;
+    } catch (error) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: (error as Error).message }));
+      return;
+    }
+  }
+
+  if (req.method === "PATCH" && req.url?.startsWith("/api/agents/")) {
+    try {
+      const agentId = decodeURIComponent((req.url ?? "").split("/").filter(Boolean)[2] ?? "");
+      if (!agentId) throw new Error("agent id is required");
+      const raw = await readBody(req);
+      const payload = raw ? JSON.parse(raw) : {};
+      const updated = await updateAgent(agentId, payload);
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true, data: updated }));
+      return;
+    } catch (error) {
+      res.statusCode = 400;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: (error as Error).message }));
+      return;
+    }
+  }
+
+  if (req.method === "GET" && req.url?.startsWith("/api/agent/communications")) {
+    try {
+      await ensurePrimaryAgent(defaultAgentName, ollamaModel);
+      const data = await listAgents();
+      const links = data.flatMap((item) => data
+        .filter((peer) => peer.id !== item.id)
+        .filter((peer) => item.communication_mode === "direct" || item.is_primary || peer.is_primary)
+        .map((peer) => ({ from: item.id, to: peer.id, mode: item.communication_mode })));
+      res.statusCode = 200;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: true, data: links }));
+      return;
+    } catch (error) {
+      res.statusCode = 500;
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ ok: false, error: (error as Error).message }));
+      return;
+    }
+  }
 
   if (req.method === "GET" && req.url === "/api/inference/routes") {
     const ollamaHealth = await getOllamaRouteHealth(ollamaBaseUrl);
@@ -242,7 +338,8 @@ const server = createServer(async (req, res) => {
     try {
       const raw = await readBody(req);
       const payload = raw ? JSON.parse(raw) : {};
-      const scope = String(payload.scope ?? `${workspace}:${agent}`).trim();
+      const context = await resolveAgentContext(typeof payload.agent_id === "string" ? payload.agent_id : undefined);
+      const scope = String(payload.scope ?? `${workspace}:${context.agent_name}`).trim();
       const kind = String(payload.kind ?? "methodology").trim() as "pitfall" | "methodology" | "decision";
       const title = String(payload.title ?? "manual learning").trim();
       const summary = String(payload.summary ?? "").trim();
@@ -250,7 +347,7 @@ const server = createServer(async (req, res) => {
       if (!summary) throw new Error("summary is required");
       if (!["pitfall", "methodology", "decision"].includes(kind)) throw new Error("invalid learning kind");
 
-      const result = await recordLearning({ scope, kind, title, summary, details });
+      const result = await recordLearning({ scope, kind, title, summary, details, memory_namespace: context.memory_namespace });
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ ok: true, data: result }));
@@ -336,7 +433,8 @@ const server = createServer(async (req, res) => {
         const limitParam = requestUrl.searchParams.get("limit");
         const status = statusParam ?? undefined;
         const limit = limitParam ? Number(limitParam) : undefined;
-        const tasks = await listTasks({ status: status as import("./core/tasks/store").TaskStatus | undefined, limit });
+        const agentId = requestUrl.searchParams.get("agent_id") ?? undefined;
+        const tasks = await listTasks({ status: status as import("./core/tasks/store").TaskStatus | undefined, limit, agent_id: agentId ?? undefined });
         res.statusCode = 200;
         res.setHeader("content-type", "application/json");
         res.end(JSON.stringify({ ok: true, data: tasks }));
@@ -455,6 +553,7 @@ const server = createServer(async (req, res) => {
       const payload = raw ? JSON.parse(raw) : {};
       const text = String(payload.text ?? "").trim();
       const path = String(payload.path ?? "anythingllm").trim();
+      const context = await resolveAgentContext(typeof payload.agent_id === "string" ? payload.agent_id : undefined);
       const confirmToken = typeof payload.confirm_token === "string" ? payload.confirm_token.trim() : "";
       if (!text && !confirmToken) throw new Error("text or confirm_token is required");
       if (!["anythingllm", "ollama"].includes(path)) throw new Error("path must be anythingllm or ollama");
@@ -472,7 +571,7 @@ const server = createServer(async (req, res) => {
           thread_id: `approval-ui:${Date.now()}`,
         },
         workspace,
-        agent,
+        agent: context.agent_name,
         message: {
           text,
           attachments: [],
@@ -490,7 +589,7 @@ const server = createServer(async (req, res) => {
 
       res.statusCode = 200;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ ok: true, trace_id: event.trace_id, reply, path, model: path === "ollama" ? ollamaModel : undefined }));
+      res.end(JSON.stringify({ ok: true, trace_id: event.trace_id, reply, path, model: path === "ollama" ? ollamaModel : undefined, agent: context }));
       return;
     } catch (error) {
       console.error("/api/agent/command failed", error);
