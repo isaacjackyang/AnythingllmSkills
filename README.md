@@ -46,6 +46,97 @@
 3. 測試粒度更細：可對 `core` 與 `routes` 做定向測試。
 4. 後續擴充更穩：新增通道/工具/記憶功能時，不需要再回到巨型單檔修改。
 
+### 2.0.1 `gateway/` 小型 `.ts` 模組用途速查
+
+> 你提到想看「每一個小 ts 的用途」，這裡先列**目前核心運作會用到**的 TypeScript 模組（不含 `__tests__`）。
+> 建議閱讀順序：`server.ts` → `create_app.ts` → `routes/*` → `core/*` → `workers/*`。
+
+#### 啟動與組裝
+
+| 檔案 | 主要用途 |
+| --- | --- |
+| `gateway/server.ts` | 啟動 HTTP server、掛 graceful shutdown、銜接 `create_app.ts`。 |
+| `gateway/create_app.ts` | 建立 app instance、註冊 middleware、組裝所有路由。 |
+| `gateway/lib/router.ts` | 輕量路由器封裝，提供 route 註冊與 dispatch。 |
+| `gateway/lib/errors.ts` | 統一錯誤型別與錯誤回應格式。 |
+
+#### Route 層（API 對外入口）
+
+| 檔案 | 主要用途 |
+| --- | --- |
+| `gateway/routes/health.ts` | `/healthz` 等健康檢查端點。 |
+| `gateway/routes/agent_control.ts` | Agent 開關、模式、權限等控制端點。 |
+| `gateway/routes/agents.ts` | 多 Agent 註冊、查詢、更新管理。 |
+| `gateway/routes/channels.ts` | Channel 啟用/停用與設定查詢。 |
+| `gateway/routes/command.ts` | 主要命令入口（例如 `/api/agent/command`）。 |
+| `gateway/routes/tasks.ts` | 任務列表、查詢、取消、刪除、手動觸發。 |
+| `gateway/routes/memory.ts` | 記憶寫入（learn）與檢索（search）API。 |
+| `gateway/routes/system.ts` | 系統初始化與環境檢查入口。 |
+| `gateway/routes/inference.ts` | 推理流程相關 API（模型回覆/提案封裝）。 |
+| `gateway/routes/approvals.ts` | 審批流程 API（待審、確認、拒絕）。 |
+| `gateway/routes/ingress_telegram.ts` | Telegram webhook ingress。 |
+| `gateway/routes/ingress_line.ts` | LINE webhook ingress。 |
+| `gateway/routes/ui.ts` | approval UI 靜態資源或入口路徑。 |
+| `gateway/routes/types.ts` | 路由共用型別（request context / payload 型別）。 |
+
+#### Core 層（業務能力與治理）
+
+| 檔案 | 主要用途 |
+| --- | --- |
+| `gateway/core/router.ts` | 核心事件路由與 policy 判斷主流程。 |
+| `gateway/core/event.ts` | 標準事件格式、`trace_id` 與事件建模。 |
+| `gateway/core/lifecycle.ts` | 系統生命週期狀態（啟動、健康、版本等）。 |
+| `gateway/core/channel_control.ts` | Channel 狀態控管（enable/disable/check）。 |
+| `gateway/core/agent_control.ts` | Agent 執行控制（模式、限制、策略切換）。 |
+| `gateway/core/agents_registry.ts` | Agent 註冊表與 agent metadata 管理。 |
+| `gateway/core/agent_messaging.ts` | Agent 間訊息傳遞與通信規則。 |
+| `gateway/core/autonomy_hooks.ts` | 自主行為 hook（任務前後鉤子、擴充點）。 |
+| `gateway/core/conversation_store.ts` | 對話上下文存取。 |
+| `gateway/core/approvals_store.ts` | 審批資料暫存與 token 流程。 |
+| `gateway/core/anythingllm_client.ts` | 呼叫 AnythingLLM API 的 client。 |
+| `gateway/core/ollama_client.ts` | 呼叫 Ollama API 的 client。 |
+
+#### Policy 子模組
+
+| 檔案 | 主要用途 |
+| --- | --- |
+| `gateway/core/policy/intent.ts` | 意圖分類/解析（用於路由決策）。 |
+| `gateway/core/policy/roles.ts` | 角色權限矩陣與操作邊界。 |
+| `gateway/core/policy/rules.ts` | allow/reject/approval 規則實作。 |
+
+#### Tools / Tasks / Proposals / Memory
+
+| 檔案 | 主要用途 |
+| --- | --- |
+| `gateway/core/tools/shell_command.ts` | 受控 shell 指令執行。 |
+| `gateway/core/tools/http_request.ts` | 受控 HTTP 工具呼叫。 |
+| `gateway/core/tools/db_query.ts` | DB 查詢工具封裝。 |
+| `gateway/core/tools/queue_job.ts` | 工具任務排程進 queue。 |
+| `gateway/core/tasks/store.ts` | 任務狀態儲存與查詢。 |
+| `gateway/workers/job_runner.ts` | 背景輪詢 queue 並執行任務。 |
+| `gateway/core/proposals/schema.ts` | proposal 資料 schema/type 定義。 |
+| `gateway/core/proposals/store.ts` | proposal 暫存與讀取。 |
+| `gateway/core/memory/evolution.ts` | 經驗萃取（methodology / pitfall）寫入流程。 |
+| `gateway/core/memory/ldb_architecture.ts` | LanceDB 記憶索引/檢索整合邏輯。 |
+
+#### Middleware / Audit
+
+| 檔案 | 主要用途 |
+| --- | --- |
+| `gateway/core/middleware/auth.ts` | API 驗證/授權 middleware。 |
+| `gateway/core/middleware/rate_limit.ts` | 流量限制與濫用保護。 |
+| `gateway/core/audit/logger.ts` | 審計事件記錄入口。 |
+| `gateway/core/audit/persistence.ts` | 審計資料持久化（檔案或儲存層）。 |
+
+#### Connectors（外部通道適配器）
+
+| 檔案 | 主要用途 |
+| --- | --- |
+| `gateway/connectors/telegram/connector.ts` | Telegram 訊息收發封裝。 |
+| `gateway/connectors/line/connector.ts` | LINE 訊息收發封裝。 |
+| `gateway/connectors/discord/connector.ts` | Discord 訊息收發封裝。 |
+| `gateway/connectors/slack/connector.ts` | Slack 訊息收發封裝。 |
+
 ### 2.1 系統架構流程圖
 
 ```mermaid
