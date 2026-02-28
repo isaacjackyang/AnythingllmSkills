@@ -10,6 +10,8 @@ export interface AnythingLlmClientConfig {
   baseUrl: string;
   apiKey: string;
   model?: string;
+  maxRetries?: number;
+  retryBaseDelayMs?: number;
 }
 
 interface ChatResponse {
@@ -22,11 +24,15 @@ export class AnythingLlmClient implements BrainClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
   private readonly model?: string;
+  private readonly maxRetries: number;
+  private readonly retryBaseDelayMs: number;
 
   constructor(config: AnythingLlmClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
     this.apiKey = config.apiKey;
     this.model = config.model;
+    this.maxRetries = Math.max(0, Math.floor(config.maxRetries ?? 1));
+    this.retryBaseDelayMs = Math.max(50, Math.floor(config.retryBaseDelayMs ?? 200));
   }
 
   async propose(event: Event): Promise<ToolProposal> {
@@ -73,28 +79,40 @@ export class AnythingLlmClient implements BrainClient {
       throw new Error("ANYTHINGLLM_API_KEY is empty. Please set it in .env.gateway before sending commands.");
     }
 
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify(payload),
-      });
-    } catch (error) {
-      const details = (error as Error).message || "unknown error";
-      throw new Error(`AnythingLLM connection failed (${url}): ${details}`);
+    for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify(payload),
+        });
+      } catch (error) {
+        const details = (error as Error).message || "unknown error";
+        if (attempt < this.maxRetries) {
+          await sleep(this.retryBaseDelayMs * (attempt + 1));
+          continue;
+        }
+        throw new Error(`AnythingLLM connection failed (${url}): ${details}`);
+      }
+
+      if (!response.ok) {
+        const body = await response.text();
+        if (attempt < this.maxRetries && isRetryableStatus(response.status)) {
+          await sleep(this.retryBaseDelayMs * (attempt + 1));
+          continue;
+        }
+        throw new Error(`AnythingLLM chat failed (${response.status}): ${body}`);
+      }
+
+      const data = (await response.json()) as ChatResponse;
+      return data.textResponse ?? data.response ?? data.text ?? "";
     }
 
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`AnythingLLM chat failed (${response.status}): ${body}`);
-    }
-
-    const data = (await response.json()) as ChatResponse;
-    return data.textResponse ?? data.response ?? data.text ?? "";
+    throw new Error("AnythingLLM chat failed: retry budget exhausted");
   }
 
   private extractJson<T>(raw: string): T {
@@ -102,4 +120,13 @@ export class AnythingLlmClient implements BrainClient {
     const jsonText = fenced?.[1] ?? raw;
     return JSON.parse(jsonText) as T;
   }
+}
+
+
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

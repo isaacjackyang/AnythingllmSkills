@@ -270,3 +270,85 @@ Invoke-RestMethod http://localhost:8787/api/channels
   - 任務：寫入 `agent_id`。
   - 記憶：寫入 `memory_namespace`。
   - 註冊表：`gateway/data/agent_registry.json`。
+
+
+---
+
+## 11) 實用、可靠、精簡、高效率、聰明 Agent 的 PM 清單（架構面 + 程式細節）
+
+> 目標：避免「修一個點、炸整個系統」；把 Agent 做成可預測、可回復、可持續優化的產品。
+
+### A. 架構面（Architecture）
+
+- [ ] **單一責任分層**：通道接入、路由策略、推理、工具執行、記憶、排程清楚分層。
+- [ ] **明確控制面**：具備 pause/resume/stop、channel enable/disable、approval gate。
+- [ ] **可觀測性預設開啟**：health、lifecycle、tasks、pending approvals、trace_id 可追蹤。
+- [ ] **故障隔離**：某個通道/工具失敗，不拖垮整體服務。
+- [ ] **降級策略**：外部依賴（如 LLM / DB）失效時可 fallback、可回報、可暫存。
+- [ ] **安全邊界**：request size、timeout、輸入驗證、最小權限。
+- [ ] **狀態治理**：任務可取消、可查詢、可重試（至少要可安全中止）。
+- [ ] **記憶治理**：短期/長期記憶分層，寫入有節制，檢索有成本上限。
+
+### B. 程式細節（Implementation）
+
+- [ ] **設定防呆**：環境變數 parsing 有 fallback 與 warning（避免非法值直接炸裂）。
+- [ ] **API 合約穩定**：統一 response schema（ok/data/error）與錯誤碼語義。
+- [ ] **輸入輸出上限**：body bytes、檔案讀取上限、執行 timeout 有預設。
+- [ ] **可測性**：至少要有 smoke checks（healthz/lifecycle/關鍵 API）。
+- [ ] **回歸保護**：每次改動都能快速做最小驗證（腳本化）。
+- [ ] **文件同步**：行為變更時，README / runbook 同步更新。
+- [ ] **啟動穩定**：啟動腳本可檢查依賴、補齊缺件、回報可操作建議。
+- [ ] **錯誤訊息可行動**：log 要告訴使用者「下一步怎麼修」。
+
+### C. 依此清單審視目前本專案 Agent（現況）
+
+| 面向 | 現況判定 | 說明 |
+|---|---|---|
+| 分層架構 | ✅ 已具備 | 已拆分 gateway/router/worker/memory/connector，多數責任分離。 |
+| 控制面 | ✅ 已具備 | 有 agent control、channel control、approval UI 與 pending action 流程。 |
+| 可觀測性 | ✅ 已具備 | 有 `healthz`、`lifecycle`、task 與 route 健康資訊 API。 |
+| 安全邊界 | ✅ 已具備（持續補強） | 已有 request body 上限、memory 讀取上限、Ollama timeout。 |
+| 設定防呆 | ✅ 已補上 | 數值 env 現在會驗證並 fallback，避免錯值導致異常。 |
+| 啟動穩定 | ✅ 已具備 | 有 bootstrap / check-and-fix / start 腳本與 health wait。 |
+| 回歸保護 | ⚠️ 需加強 | 目前偏腳本檢查，缺少可持續執行的自動化測試（CI smoke/contract）。 |
+| 故障隔離與降級 | ⚠️ 需加強 | 對外部依賴失效雖可回報，但可再增加 circuit breaker / retry budget。 |
+| 錯誤可行動性 | ⚠️ 需加強 | 多數訊息可讀，但可再標準化錯誤碼與 remediation 指引。 |
+
+### D. 下一步優先順序（PM 建議）
+
+1. **先補自動化 smoke/contract tests**：鎖住 `healthz/lifecycle/agent command/tasks` 基本契約。
+   - 已新增：`node scripts/smoke_gateway_contract.mjs`（檢查 `healthz/lifecycle/channels/inference routes/tasks` 基本契約）。
+2. **導入依賴降級策略**：對 LLM、memory backend 增加 timeout + retry budget + 明確 fallback 文案。
+   - 已開始：AnythingLLM / Ollama 已加入有限重試（`UPSTREAM_RETRY_MAX_ATTEMPTS`、`UPSTREAM_RETRY_BASE_DELAY_MS`）。
+3. **統一錯誤碼與 runbook 對照**：讓 on-call 看到錯誤碼就知道處理流程。
+   - 已開始：關鍵 API 回應新增 `error_code`，對照表見 `gateway/README.md`。
+4. **建立 release 檢查表**：每次變更前後跑固定檢查，避免「修 A 壞 B」。
+   - 已新增：`node scripts/release_checklist.mjs`（整合語法檢查 + smoke contract；可加 `--require-live` 強制 live 檢查必須通過）。
+
+
+### E. 快速執行契約煙霧測試（新增）
+
+先啟動 Gateway 後執行：
+
+```bash
+node scripts/smoke_gateway_contract.mjs
+```
+
+可指定目標：
+
+```bash
+node scripts/smoke_gateway_contract.mjs --base-url http://localhost:8787 --timeout-ms 4000
+```
+
+
+### F. Release 檢查表（新增）
+
+```bash
+node scripts/release_checklist.mjs
+```
+
+強制 live 環境必須通過：
+
+```bash
+node scripts/release_checklist.mjs --base-url http://localhost:8787 --require-live
+```
