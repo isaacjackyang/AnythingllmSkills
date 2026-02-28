@@ -60,3 +60,14 @@ test("complete/cancel/delete obey state constraints", async () => {
   assert.equal(all.length, 1);
   assert.equal(all[0].status, "cancelled");
 });
+
+
+test("listTasks can filter by agent_id", async () => {
+  await resetTaskDbForTest();
+  await enqueueTask({ name: "a-1", payload: {}, agent_id: "alpha" });
+  await enqueueTask({ name: "b-1", payload: {}, agent_id: "beta" });
+
+  const alphaTasks = await listTasks({ agent_id: "alpha" });
+  assert.equal(alphaTasks.length, 1);
+  assert.equal(alphaTasks[0].agent_id, "alpha");
+});

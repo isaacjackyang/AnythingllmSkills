@@ -776,6 +776,29 @@
 
 
 
+
+            <article class="flow-card" aria-label="Agent 管理區" data-collapsible data-collapsible-label="Agent 管理（模型/靈魂/任務/記憶）">
+              <h3>Agent 管理區</h3>
+              <p class="flow-help">可新增多個 Agent；每個 Agent 可有不同模型、靈魂、任務板與記憶 namespace，並可設定跨 Agent 通訊模式。</p>
+              <div class="task-toolbar">
+                <label for="agentSelect">當前 Agent：</label>
+                <select id="agentSelect" style="min-width: 220px;"></select>
+                <button id="refreshAgents" class="ctrl-btn" type="button">重新整理 Agent</button>
+              </div>
+              <div class="task-toolbar" style="margin-top:8px;">
+                <input id="newAgentName" class="chat-input" style="max-width:180px;" type="text" placeholder="Agent 名稱" />
+                <input id="newAgentModel" class="chat-input" style="max-width:180px;" type="text" placeholder="模型，例如 gpt-oss:20b" />
+                <input id="newAgentSoul" class="chat-input" style="max-width:160px;" type="text" placeholder="靈魂，例如 planner" />
+                <select id="newAgentComm" style="max-width:180px;">
+                  <option value="hub_and_spoke">通信：hub-and-spoke</option>
+                  <option value="direct">通信：direct</option>
+                </select>
+                <button id="createAgent" class="ctrl-btn" type="button">新增 Agent</button>
+              </div>
+              <pre id="agentInfo" class="console-log" style="min-height:130px;max-height:240px;">[agent] 尚未載入 Agent 設定</pre>
+              <pre id="agentCommInfo" class="console-log" style="min-height:100px;max-height:180px;">[agent] 尚未載入 Agent 通信圖</pre>
+            </article>
+
             <article class="flow-card" aria-label="任務列表" data-collapsible data-collapsible-label="任務列表（排序/刪除）">
               <h3>任務列表（可排序 / 刪除）</h3>
               <p class="flow-help">可依建立時間、更新時間、優先級排序；僅允許刪除終態任務（succeeded / failed / cancelled）。</p>
@@ -874,6 +897,15 @@
       const channelStateLine = document.getElementById('channelStateLine');
       const channelStateWebUi = document.getElementById('channelStateWebUi');
       const channelToggleButtons = document.querySelectorAll('[data-channel-toggle]');
+      const agentSelect = document.getElementById('agentSelect');
+      const refreshAgentsBtn = document.getElementById('refreshAgents');
+      const newAgentName = document.getElementById('newAgentName');
+      const newAgentModel = document.getElementById('newAgentModel');
+      const newAgentSoul = document.getElementById('newAgentSoul');
+      const newAgentComm = document.getElementById('newAgentComm');
+      const createAgentBtn = document.getElementById('createAgent');
+      const agentInfo = document.getElementById('agentInfo');
+      const agentCommInfo = document.getElementById('agentCommInfo');
       const taskList = document.getElementById('taskList');
       const taskSort = document.getElementById('taskSort');
       const refreshTasksBtn = document.getElementById('refreshTasks');
@@ -1684,6 +1716,50 @@
         });
       };
 
+      const renderAgentInfo = () => {
+        const current = cachedAgents.find((item) => item.id === selectedAgentId) || cachedAgents[0];
+        if (agentInfo) {
+          if (!current) {
+            agentInfo.textContent = '[agent] 尚無 Agent';
+          } else {
+            agentInfo.textContent = JSON.stringify(current, null, 2);
+          }
+        }
+      };
+
+      const refreshAgentCommunication = async () => {
+        const response = await fetch('/api/agent/communications');
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || '讀取 Agent 通信圖失敗');
+        }
+        if (agentCommInfo) {
+          agentCommInfo.textContent = JSON.stringify(payload.data || [], null, 2);
+        }
+      };
+
+      const refreshAgents = async ({ keepSelection = true } = {}) => {
+        const response = await fetch('/api/agents');
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || '讀取 Agent 列表失敗');
+        }
+
+        cachedAgents = Array.isArray(payload.data) ? payload.data : [];
+        if (!selectedAgentId || !keepSelection || !cachedAgents.some((item) => item.id === selectedAgentId)) {
+          selectedAgentId = cachedAgents[0]?.id || null;
+        }
+
+        if (agentSelect) {
+          agentSelect.innerHTML = cachedAgents.map((item) => `<option value="${item.id}">${item.name} (${item.model})${item.is_primary ? ' [primary]' : ''}</option>`).join('');
+          if (selectedAgentId) agentSelect.value = selectedAgentId;
+        }
+
+        renderAgentInfo();
+        await refreshAgentCommunication();
+        return cachedAgents;
+      };
+
       const taskStatusPriority = {
         running: 6,
         pending: 5,
@@ -1717,7 +1793,7 @@
                 <span class="task-meta">${task.status}</span>
               </div>
               <div class="task-meta">id: ${task.id}</div>
-              <div class="task-meta">priority: ${task.priority}｜建立：${toLocalTime(task.created_at)}｜更新：${toLocalTime(task.updated_at)}</div>
+              <div class="task-meta">agent: ${task.agent_id || '-'}｜priority: ${task.priority}｜建立：${toLocalTime(task.created_at)}｜更新：${toLocalTime(task.updated_at)}</div>
               <div class="task-actions">
                 <button class="task-btn delete" data-task-delete="${task.id}" type="button" ${canDelete ? '' : 'disabled'}>刪除</button>
               </div>
@@ -1727,7 +1803,7 @@
       };
 
       const refreshTasks = async () => {
-        const response = await fetch('/api/tasks');
+        const response = await fetch(`/api/tasks${selectedAgentId ? `?agent_id=${encodeURIComponent(selectedAgentId)}` : ''}`);
         const payload = await response.json();
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || '讀取任務列表失敗');
@@ -1821,7 +1897,7 @@
       };
 
       const refreshState = async () => {
-        const response = await fetch('/api/agent/control');
+        const response = await fetch(`/api/agent/control${selectedAgentId ? `?agent_id=${encodeURIComponent(selectedAgentId)}` : ''}`);
         const payload = await response.json();
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || '讀取 Agent 狀態失敗');
@@ -1891,7 +1967,7 @@
         const response = await fetch('/api/agent/control', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action }),
+          body: JSON.stringify({ action, agent_id: selectedAgentId }),
         });
         const payload = await response.json();
         if (!response.ok || !payload.ok) {
@@ -1906,7 +1982,7 @@
         const response = await fetch('/api/agent/command', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, path }),
+          body: JSON.stringify({ text, path, agent_id: selectedAgentId }),
         });
         const payload = await response.json();
         if (!response.ok || !payload.ok) {
@@ -1963,6 +2039,64 @@
 
 
 
+      if (agentSelect) {
+        agentSelect.addEventListener('change', async () => {
+          selectedAgentId = agentSelect.value || null;
+          renderAgentInfo();
+          await refreshState();
+          await refreshTasks();
+          appendLog(`[agent] 已切換 Agent：${selectedAgentId || 'default'}`);
+        });
+      }
+
+      if (refreshAgentsBtn) {
+        refreshAgentsBtn.addEventListener('click', async () => {
+          try {
+            await refreshAgents();
+            await refreshState();
+            await refreshTasks();
+            appendLog('[agent] Agent 列表已更新');
+          } catch (error) {
+            status.textContent = `Agent 列表更新失敗：${error.message}`;
+            appendLog(`[error] Agent 列表更新失敗：${error.message}`);
+          }
+        });
+      }
+
+      if (createAgentBtn) {
+        createAgentBtn.addEventListener('click', async () => {
+          const name = newAgentName?.value?.trim();
+          if (!name) {
+            status.textContent = '請輸入 Agent 名稱';
+            return;
+          }
+          const model = newAgentModel?.value?.trim() || 'gpt-oss:20b';
+          const soul = newAgentSoul?.value?.trim() || 'operations';
+          const communication_mode = newAgentComm?.value === 'direct' ? 'direct' : 'hub_and_spoke';
+          try {
+            const response = await fetch('/api/agents', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name, model, soul, communication_mode }),
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) throw new Error(payload.error || '新增 Agent 失敗');
+            selectedAgentId = payload.data?.id || selectedAgentId;
+            if (newAgentName) newAgentName.value = '';
+            if (newAgentModel) newAgentModel.value = '';
+            if (newAgentSoul) newAgentSoul.value = '';
+            await refreshAgents({ keepSelection: true });
+            await refreshState();
+            await refreshTasks();
+            appendLog(`[agent] 已新增 Agent：${payload.data?.name || name}`);
+          } catch (error) {
+            status.textContent = `新增 Agent 失敗：${error.message}`;
+            appendLog(`[error] 新增 Agent 失敗：${error.message}`);
+          }
+        });
+      }
+
+
       if (chatPath) {
         chatPath.addEventListener('change', () => {
           selectedInferencePath = chatPath.value === 'ollama' ? 'ollama' : 'anythingllm';
@@ -1990,7 +2124,7 @@
           applyInferenceRouteUiState(inferenceRoutesState);
           renderFlow(flowLastControlState);
           const reply = payload.reply;
-          appendChatLog('agent', reply);
+          appendChatLog('agent', `${payload.agent?.agent_name || 'agent'}: ${reply}`);
           status.textContent = `已收到回覆（${payload.path || path}）。`;
           appendLog(`[command] 指令完成（${payload.path || path}${payload.model ? ` / ${payload.model}` : ''}）`);
         } catch (error) {
@@ -2266,12 +2400,14 @@
         },
       });
 
-      Promise.all([refreshState(), refreshChannels(), refreshTasks(), refreshInferenceRoutes(), refreshMemoryFiles()])
+      Promise.all([refreshAgents({ keepSelection: false }), refreshChannels(), refreshInferenceRoutes(), refreshMemoryFiles()])
         .then(async () => {
           controlApiConnected = true;
           channelsApiConnected = true;
           status.textContent = '已連線 Gateway 控制 API';
           appendLog('[system] 已連線 Gateway 控制 API');
+          await refreshState();
+          await refreshTasks();
           const selected = memoryFileSelect?.value || '';
           if (selected) {
             await openMemoryFile(selected);

@@ -8,6 +8,7 @@ export interface QueueJobInput {
   priority?: number;
   max_attempts?: number;
   scheduled_at?: string;
+  agent_id?: string;
 }
 
 export async function queueJob(input: QueueJobInput): Promise<{ queued: boolean; queueSize: number; task_id: string; status: string }> {

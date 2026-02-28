@@ -22,6 +22,7 @@ export interface TaskRecord {
   heartbeat_at?: string;
   last_error?: string;
   result?: Record<string, unknown>;
+  agent_id?: string;
 }
 
 interface TaskDb {
@@ -36,11 +37,13 @@ export interface EnqueueTaskInput {
   priority?: number;
   max_attempts?: number;
   scheduled_at?: string;
+  agent_id?: string;
 }
 
 export interface ListTaskFilters {
   status?: TaskStatus;
   limit?: number;
+  agent_id?: string;
 }
 
 const DEFAULT_DB_PATH = path.resolve(process.cwd(), "gateway/data/task_queue_db.json");
@@ -106,6 +109,7 @@ export async function enqueueTask(input: EnqueueTaskInput): Promise<TaskRecord> 
       attempts: 0,
       max_attempts: Math.max(1, Math.trunc(input.max_attempts ?? 3)),
       scheduled_at: input.scheduled_at ?? createdAt,
+      agent_id: input.agent_id,
       created_at: createdAt,
       updated_at: createdAt,
     };
@@ -119,7 +123,8 @@ export async function enqueueTask(input: EnqueueTaskInput): Promise<TaskRecord> 
 export async function listTasks(filters: ListTaskFilters = {}): Promise<TaskRecord[]> {
   return withLock(async () => {
     const db = await readDb();
-    const filtered = filters.status ? db.tasks.filter((task) => task.status === filters.status) : db.tasks;
+    let filtered = filters.status ? db.tasks.filter((task) => task.status === filters.status) : db.tasks;
+    if (filters.agent_id) filtered = filtered.filter((task) => task.agent_id === filters.agent_id);
     const sorted = [...filtered].sort(byQueueOrder);
     if (filters.limit && filters.limit > 0) return sorted.slice(0, filters.limit);
     return sorted;

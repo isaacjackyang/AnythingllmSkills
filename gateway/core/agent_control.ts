@@ -18,11 +18,20 @@ const stateToView = {
   stopped: { assistant_status: "Stopped", execution_status: "已終止", task_progress: 0 },
 } as const;
 
-let currentState: AgentRunState = "idle";
-let lastUpdatedAt = new Date().toISOString();
+const states = new Map<string, { state: AgentRunState; lastUpdatedAt: string }>();
 
-function touch(): void {
-  lastUpdatedAt = new Date().toISOString();
+function touch(agentId: string): void {
+  const entry = states.get(agentId);
+  if (!entry) return;
+  entry.lastUpdatedAt = new Date().toISOString();
+}
+
+function ensureAgent(agentId: string): { state: AgentRunState; lastUpdatedAt: string } {
+  const existing = states.get(agentId);
+  if (existing) return existing;
+  const created = { state: "idle" as AgentRunState, lastUpdatedAt: new Date().toISOString() };
+  states.set(agentId, created);
+  return created;
 }
 
 function buildCan(state: AgentRunState): Record<AgentControlAction, boolean> {
@@ -34,42 +43,44 @@ function buildCan(state: AgentRunState): Record<AgentControlAction, boolean> {
   };
 }
 
-export function getAgentControlSnapshot(): AgentControlSnapshot {
-  const view = stateToView[currentState];
+export function getAgentControlSnapshot(agentId = "primary"): AgentControlSnapshot {
+  const current = ensureAgent(agentId);
+  const view = stateToView[current.state];
   return {
     ...view,
-    state: currentState,
-    last_updated_at: lastUpdatedAt,
-    can: buildCan(currentState),
+    state: current.state,
+    last_updated_at: current.lastUpdatedAt,
+    can: buildCan(current.state),
   };
 }
 
-export function applyAgentControl(action: AgentControlAction): AgentControlSnapshot {
-  const can = buildCan(currentState);
+export function applyAgentControl(action: AgentControlAction, agentId = "primary"): AgentControlSnapshot {
+  const current = ensureAgent(agentId);
+  const can = buildCan(current.state);
   if (!can[action]) {
-    throw new Error(`invalid action '${action}' for state '${currentState}'`);
+    throw new Error(`invalid action '${action}' for state '${current.state}'`);
   }
 
   switch (action) {
     case "start":
-      currentState = "running";
+      current.state = "running";
       break;
     case "pause":
-      currentState = "paused";
+      current.state = "paused";
       break;
     case "resume":
-      currentState = "running";
+      current.state = "running";
       break;
     case "stop":
-      currentState = "stopped";
+      current.state = "stopped";
       break;
   }
 
-  touch();
-  return getAgentControlSnapshot();
+  touch(agentId);
+  return getAgentControlSnapshot(agentId);
 }
 
-export function __resetAgentControlForTest(state: AgentRunState = "idle"): void {
-  currentState = state;
-  touch();
+export function __resetAgentControlForTest(state: AgentRunState = "idle", agentId = "primary"): void {
+  states.clear();
+  states.set(agentId, { state, lastUpdatedAt: new Date().toISOString() });
 }

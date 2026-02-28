@@ -26,7 +26,7 @@ export async function routeEvent(
     if (!approved) {
       return { trace_id: event.trace_id, reply: "❌ confirm token 無效、過期、已使用，或尚未完成審批" };
     }
-    const execution = await executeProposal(approved.proposal);
+    const execution = await executeProposal(approved.proposal, event.agent);
     await markPendingActionExecuted(approved.id);
     await recordLearning({
       scope: `${event.workspace}:${event.agent}`,
@@ -106,7 +106,7 @@ export async function routeEvent(
 
   let execution: Record<string, unknown>;
   try {
-    execution = await executeProposal(proposal);
+    execution = await executeProposal(proposal, event.agent);
   } catch (error) {
     await recordLearning({
       scope: `${event.workspace}:${event.agent}`,
@@ -136,7 +136,7 @@ export async function executeApprovedAction(action: PendingAction): Promise<Reco
   if (action.requires_confirm_token) {
     throw new Error("this action also requires confirm_token; do not execute directly after approval");
   }
-  const execution = await executeProposal(action.proposal);
+  const execution = await executeProposal(action.proposal, action.event.agent);
   await markPendingActionExecuted(action.id);
   return execution;
 }
@@ -151,7 +151,7 @@ function buildDryRunPlan(proposal: ToolProposal): Record<string, unknown> {
   };
 }
 
-async function executeProposal(proposal: ToolProposal): Promise<Record<string, unknown>> {
+async function executeProposal(proposal: ToolProposal, agentId?: string): Promise<Record<string, unknown>> {
   switch (proposal.tool) {
     case "http_request":
       return runHttpRequest(proposal.inputs as { url: string; method?: string; body?: unknown });
@@ -164,6 +164,7 @@ async function executeProposal(proposal: ToolProposal): Promise<Record<string, u
         priority: Number(proposal.inputs?.priority ?? 100),
         max_attempts: Number(proposal.inputs?.max_attempts ?? 3),
         scheduled_at: typeof proposal.inputs?.scheduled_at === "string" ? (proposal.inputs.scheduled_at as string) : undefined,
+        agent_id: agentId,
       });
     case "db_query":
       return { rows: [] };
