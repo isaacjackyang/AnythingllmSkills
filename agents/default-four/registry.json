@@ -1,0 +1,42 @@
+{
+  "version": "1.0.0",
+  "model": "gptoss20b",
+  "agents": [
+    {
+      "id": "planner",
+      "name": "Planner",
+      "system_prompt": "planner/system-prompt.md",
+      "soul": "planner/soul.md",
+      "heartbeat": "planner/heartbeat.md",
+      "memory": "planner/memory.md"
+    },
+    {
+      "id": "executor",
+      "name": "Executor",
+      "system_prompt": "executor/system-prompt.md",
+      "soul": "executor/soul.md",
+      "heartbeat": "executor/heartbeat.md",
+      "memory": "executor/memory.md"
+    },
+    {
+      "id": "reviewer",
+      "name": "Reviewer",
+      "system_prompt": "reviewer/system-prompt.md",
+      "soul": "reviewer/soul.md",
+      "heartbeat": "reviewer/heartbeat.md",
+      "memory": "reviewer/memory.md"
+    },
+    {
+      "id": "archivist",
+      "name": "Archivist",
+      "system_prompt": "archivist/system-prompt.md",
+      "soul": "archivist/soul.md",
+      "heartbeat": "archivist/heartbeat.md",
+      "memory": "archivist/memory.md"
+    }
+  ],
+  "handoff": {
+    "schema": "shared/handoff.schema.json",
+    "playbook": "shared/handoff-playbook.md"
+  }
+}

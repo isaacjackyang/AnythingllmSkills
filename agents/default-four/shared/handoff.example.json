@@ -1,0 +1,32 @@
+{
+  "task_id": "task-2026-02-28-001",
+  "from_agent": "planner",
+  "to_agent": "executor",
+  "goal": "建立四 agent 基礎檔案與交接規格",
+  "summary": "已完成角色拆分與檔案結構設計，請依規格建立檔案。",
+  "inputs": [
+    "需求：同模型不同靈魂與記憶",
+    "角色：planner/executor/reviewer/archivist"
+  ],
+  "outputs": [
+    "目錄設計完成",
+    "必備檔案清單完成"
+  ],
+  "risks": [
+    "若無 schema 約束，交接品質易漂移"
+  ],
+  "next_actions": [
+    "建立每個 agent 的 system-prompt/soul/heartbeat/memory 檔案",
+    "建立共享 handoff schema 與 playbook"
+  ],
+  "status": "ready",
+  "confidence": 0.88,
+  "memory_writeback": {
+    "shared_task_memory": [
+      "四 agent 架構固定採 planner->executor->reviewer->archivist"
+    ],
+    "long_term_candidate": [
+      "handoff 必須有 next_actions 與 confidence"
+    ]
+  }
+}
