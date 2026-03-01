@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://anythingllm.local/schemas/agent-handoff.json",
+  "title": "AgentHandoff",
+  "type": "object",
+  "required": [
+    "task_id",
+    "from_agent",
+    "to_agent",
+    "goal",
+    "summary",
+    "inputs",
+    "outputs",
+    "risks",
+    "next_actions",
+    "status",
+    "confidence"
+  ],
+  "properties": {
+    "task_id": { "type": "string", "minLength": 1 },
+    "from_agent": {
+      "type": "string",
+      "enum": ["planner", "executor", "reviewer", "archivist"]
+    },
+    "to_agent": {
+      "type": "string",
+      "enum": ["planner", "executor", "reviewer", "archivist"]
+    },
+    "goal": { "type": "string", "minLength": 1 },
+    "summary": { "type": "string", "minLength": 1 },
+    "inputs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "outputs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "risks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "next_actions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": ["ready", "blocked", "needs_clarification", "done"]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "memory_writeback": {
+      "type": "object",
+      "properties": {
+        "shared_task_memory": { "type": "array", "items": { "type": "string" } },
+        "long_term_candidate": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
