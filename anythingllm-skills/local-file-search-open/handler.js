@@ -369,7 +369,8 @@ async function execute(input = {}, logger) {
 }
 
 async function handler({ input, logger } = {}) {
-  return execute(input || {}, logger);
+  const result = await execute(input || {}, logger);
+  return JSON.stringify(result);
 }
 
 module.exports = {

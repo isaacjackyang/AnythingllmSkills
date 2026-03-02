@@ -9,7 +9,6 @@ import { AnythingLlmClient } from "./core/anythingllm_client.js";
 import { OllamaClient } from "./core/ollama_client.js";
 import { ensurePrimaryAgent, getAgentById } from "./core/agents_registry.js";
 import type { Event } from "./core/event.js";
-
 // Routes
 import { healthzRoute, lifecycleRoute, soulRoute } from "./routes/health.js";
 import { getAgentControlRoute, postAgentControlRoute } from "./routes/agent_control.js";
@@ -24,26 +23,23 @@ import { ingressTelegramRoute } from "./routes/ingress_telegram.js";
 import { ingressLineRoute } from "./routes/ingress_line.js";
 import { approvalUiRoute } from "./routes/ui.js";
 import { systemInitRoute } from "./routes/system.js";
-
 // Middleware
 import { createAuthMiddleware } from "./core/middleware/auth.js";
 import { RateLimiter, getRateLimitKey } from "./core/middleware/rate_limit.js";
 import { listAgentMessages, sendAgentMessage, markMessageRead, getPendingMessageCount } from "./core/agent_messaging.js";
 import { registerBuiltInHooks } from "./core/autonomy_hooks.js";
-
 /* ── Config ────────────────────────────────────────── */
-
-function parsePositiveIntEnv(name: string, fallback: number): number {
+function parsePositiveIntEnv(name: string, fallback: number): string {
     const raw = process.env[name];
-    if (!raw || !raw.trim()) return fallback;
+    if (!raw || !raw.trim())
+        return String(fallback);
     const parsed = Number(raw);
     if (!Number.isFinite(parsed) || parsed <= 0) {
         console.warn(`[config] ${name}=${raw} is invalid, falling back to ${fallback}`);
-        return fallback;
+        return String(fallback);
     }
-    return Math.floor(parsed);
+    return String(Math.floor(parsed));
 }
-
 export interface AppConfig {
     port: number;
     telegramToken: string;
@@ -66,9 +62,8 @@ export interface AppConfig {
     gatewayApiKey: string;
     rateLimitPerMinute: number;
 }
-
-export function loadConfigFromEnv(): AppConfig {
-    return {
+export function loadConfigFromEnv(): string {
+    return String({
         port: parsePositiveIntEnv("PORT", 8787),
         telegramToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
         telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET,
@@ -80,68 +75,66 @@ export function loadConfigFromEnv(): AppConfig {
         defaultAgentName: process.env.DEFAULT_AGENT ?? "ops-agent",
         ollamaBaseUrl: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434",
         ollamaModel: process.env.OLLAMA_MODEL ?? "gpt-oss:20b",
-        ollamaTimeoutMs: parsePositiveIntEnv("OLLAMA_TIMEOUT_MS", 12_000),
+        ollamaTimeoutMs: parsePositiveIntEnv("OLLAMA_TIMEOUT_MS", 12000),
         upstreamRetryMaxAttempts: parsePositiveIntEnv("UPSTREAM_RETRY_MAX_ATTEMPTS", 2),
         upstreamRetryBaseDelayMs: parsePositiveIntEnv("UPSTREAM_RETRY_BASE_DELAY_MS", 200),
-        heartbeatIntervalMs: parseHeartbeatInterval(process.env.HEARTBEAT_INTERVAL_MS, 10_000),
+        heartbeatIntervalMs: parseHeartbeatInterval(process.env.HEARTBEAT_INTERVAL_MS, 10000),
         maxBodyBytes: parsePositiveIntEnv("MAX_BODY_BYTES", 1024 * 1024),
         maxMemoryFileReadBytes: parsePositiveIntEnv("MAX_MEMORY_FILE_READ_BYTES", 256 * 1024),
-        taskRunnerIntervalMs: parsePositiveIntEnv("TASK_RUNNER_INTERVAL_MS", 2_000),
+        taskRunnerIntervalMs: parsePositiveIntEnv("TASK_RUNNER_INTERVAL_MS", 2000),
         gatewayApiKey: process.env.GATEWAY_API_KEY ?? "",
         rateLimitPerMinute: parsePositiveIntEnv("RATE_LIMIT_PER_MINUTE", 60),
-    };
+    });
 }
-
 /* ── Ollama health check ────────────────────────────── */
-
-async function getOllamaRouteHealth(baseUrl: string): Promise<{ enabled: boolean; reason: string | null }> {
+async function getOllamaRouteHealth(baseUrl: string): Promise<string> {
     try {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 2_000);
+        const timer = setTimeout(() => controller.abort(), 2000);
         const response = await fetch(`${baseUrl}/api/tags`, { signal: controller.signal });
         clearTimeout(timer);
-        if (!response.ok) return { enabled: false, reason: `ollama returned ${response.status}` };
-        return { enabled: true, reason: null };
-    } catch (error) {
-        return { enabled: false, reason: (error as Error).message };
+        if (!response.ok)
+            return String({ enabled: false, reason: `ollama returned ${response.status}` });
+        return String({ enabled: true, reason: null });
     }
+    catch (error) {
+        return String({ enabled: false, reason: (error as Error).message });
+    }
+    return "";
 }
-
 /* ── App Builder ────────────────────────────────────── */
-
-export function createApp(config: AppConfig): { server: Server; shutdown: () => Promise<void> } {
+export function createApp(config: AppConfig): string {
     // Warnings
-    if (!config.telegramToken) console.warn("TELEGRAM_BOT_TOKEN is empty: telegram sendReply will fail");
-    if (!config.lineChannelAccessToken) console.warn("LINE_CHANNEL_ACCESS_TOKEN is empty: line sendReply will fail");
-    if (!config.anythingApiKey) console.warn("ANYTHINGLLM_API_KEY is empty: brain calls will fail");
-    if (!config.gatewayApiKey) console.warn("GATEWAY_API_KEY is empty: API authentication is disabled (all requests allowed)");
-
+    if (!config.telegramToken)
+        console.warn("TELEGRAM_BOT_TOKEN is empty: telegram sendReply will fail");
+    if (!config.lineChannelAccessToken)
+        console.warn("LINE_CHANNEL_ACCESS_TOKEN is empty: line sendReply will fail");
+    if (!config.anythingApiKey)
+        console.warn("ANYTHINGLLM_API_KEY is empty: brain calls will fail");
+    if (!config.gatewayApiKey)
+        console.warn("GATEWAY_API_KEY is empty: API authentication is disabled (all requests allowed)");
     // Services
     startHeartbeat(config.heartbeatIntervalMs);
     registerBuiltInHooks();
     startJobRunner(config.taskRunnerIntervalMs);
-
     const connector = new TelegramConnector({
         botToken: config.telegramToken,
         webhookSecretToken: config.telegramWebhookSecret,
         defaultWorkspace: config.workspace,
         defaultAgent: config.defaultAgentName,
     });
-
     const lineConnector = new LineConnector({
         channelAccessToken: config.lineChannelAccessToken,
         channelSecret: config.lineChannelSecret,
         defaultWorkspace: config.workspace,
         defaultAgent: config.defaultAgentName,
     });
-
     const brain = new AnythingLlmClient({
         baseUrl: config.anythingBaseUrl,
         apiKey: config.anythingApiKey,
         maxRetries: Math.max(0, config.upstreamRetryMaxAttempts - 1),
         retryBaseDelayMs: config.upstreamRetryBaseDelayMs,
     });
-
     const ollama = new OllamaClient({
         baseUrl: config.ollamaBaseUrl,
         model: config.ollamaModel,
@@ -149,24 +142,26 @@ export function createApp(config: AppConfig): { server: Server; shutdown: () => 
         maxRetries: Math.max(0, config.upstreamRetryMaxAttempts - 1),
         retryBaseDelayMs: config.upstreamRetryBaseDelayMs,
     });
-
     // Shared helpers
     async function resolveAgentContext(agentId?: string) {
         const primary = await ensurePrimaryAgent(config.defaultAgentName, config.ollamaModel);
         const resolved = agentId ? await getAgentById(agentId) : primary;
-        if (!resolved) throw new Error("agent not found");
+        if (!resolved)
+            throw new Error("agent not found");
         return { agent_id: resolved.id, agent_name: resolved.name, memory_namespace: resolved.memory_namespace };
     }
-
     async function sendReplyByChannel(event: Event, reply: string): Promise<void> {
         switch (event.channel) {
-            case "telegram": await connector.sendReply(event.conversation.thread_id, reply); return;
-            case "line": await lineConnector.sendReply(event.conversation.thread_id, reply); return;
+            case "telegram":
+                await connector.sendReply(event.conversation.thread_id, reply);
+                return;
+            case "line":
+                await lineConnector.sendReply(event.conversation.thread_id, reply);
+                return;
             case "web_ui": return;
             default: throw new Error(`unsupported reply channel: ${event.channel}`);
         }
     }
-
     // Paths
     const approvalUiPath = path.resolve(process.cwd(), "gateway/web/approval_ui/index.html");
     const memoryBrowseRoots = [
@@ -176,21 +171,16 @@ export function createApp(config: AppConfig): { server: Server; shutdown: () => 
     const memoryRootFile = path.resolve(process.cwd(), "MEMORY.md");
     const workflowScriptPath = path.resolve(process.cwd(), "scripts/memory_workflow.js");
     const initGatewayScriptPath = path.resolve(process.cwd(), "scripts/init_gateway_env.mjs");
-
     // Auth middleware
     const authCheck = createAuthMiddleware(config.gatewayApiKey, ["/healthz", "/approval-ui"]);
-
     // Rate limiter (P2-C)
-    const rateLimiter = new RateLimiter({ maxRequests: config.rateLimitPerMinute, windowMs: 60_000 });
+    const rateLimiter = new RateLimiter({ maxRequests: config.rateLimitPerMinute, windowMs: 60000 });
     const rateLimitedPaths = new Set(["/api/agent/command", "/ingress/telegram", "/ingress/line"]);
-
     // Router
     const router = new Router();
-
     // UI & health (no auth)
     router.get("/approval-ui", approvalUiRoute(approvalUiPath));
     router.get("/healthz", healthzRoute(config.maxBodyBytes));
-
     // All other routes
     router.get("/lifecycle", lifecycleRoute());
     router.post("/lifecycle/soul", soulRoute(config.maxBodyBytes));
@@ -221,7 +211,6 @@ export function createApp(config: AppConfig): { server: Server; shutdown: () => 
     router.post("/ingress/telegram", ingressTelegramRoute({ connector, brain, maxBodyBytes: config.maxBodyBytes, sendReplyByChannel }));
     router.post("/ingress/line", ingressLineRoute({ lineConnector, brain, maxBodyBytes: config.maxBodyBytes, sendReplyByChannel }));
     router.post("/api/system/init", systemInitRoute(initGatewayScriptPath));
-
     // Agent messaging routes (P3-B)
     router.get("/api/agent/messages", async (req, res) => {
         const url = new URL(req.url ?? "/", "http://localhost");
@@ -236,10 +225,12 @@ export function createApp(config: AppConfig): { server: Server; shutdown: () => 
             const from = String(payload.from_agent_id ?? "").trim();
             const to = String(payload.to_agent_id ?? "").trim();
             const content = String(payload.content ?? "").trim();
-            if (!from || !to || !content) throw new Error("from_agent_id, to_agent_id, and content are required");
+            if (!from || !to || !content)
+                throw new Error("from_agent_id, to_agent_id, and content are required");
             const msg = sendAgentMessage(from, to, content, payload.metadata ?? {});
             json(res, 200, { ok: true, data: msg });
-        } catch (error) {
+        }
+        catch (error) {
             json(res, 400, { ok: false, error: (error as Error).message });
         }
     });
@@ -249,7 +240,6 @@ export function createApp(config: AppConfig): { server: Server; shutdown: () => 
         const ok = markMessageRead(agentId, params.messageId);
         json(res, ok ? 200 : 404, { ok });
     });
-
     const server = createServer(async (req, res) => {
         // Auth check (skipped for whitelisted paths)
         const authResult = authCheck(req);
@@ -257,7 +247,6 @@ export function createApp(config: AppConfig): { server: Server; shutdown: () => 
             json(res, 401, { ok: false, error: authResult.error, error_code: "AUTH_REQUIRED" });
             return;
         }
-
         // Rate limiting for expensive paths (P2-C)
         const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
         if (rateLimitedPaths.has(pathname)) {
@@ -268,18 +257,17 @@ export function createApp(config: AppConfig): { server: Server; shutdown: () => 
                 return;
             }
         }
-
         const handled = await router.handle(req, res);
         if (!handled) {
             res.statusCode = 404;
             res.end("not found");
         }
     });
-
     // Graceful shutdown (P2-A)
     let isShuttingDown = false;
     async function shutdown(): Promise<void> {
-        if (isShuttingDown) return;
+        if (isShuttingDown)
+            return;
         isShuttingDown = true;
         console.log("[gateway] shutting down gracefully…");
         stopHeartbeat();
@@ -289,10 +277,9 @@ export function createApp(config: AppConfig): { server: Server; shutdown: () => 
             setTimeout(() => {
                 console.warn("[gateway] force closing after timeout");
                 resolve();
-            }, 10_000);
+            }, 10000);
         });
         console.log("[gateway] shutdown complete");
     }
-
-    return { server, shutdown };
+    return String({ server, shutdown });
 }
