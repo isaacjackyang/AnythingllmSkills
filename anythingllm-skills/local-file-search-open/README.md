@@ -110,13 +110,13 @@
 
 ## 7) 一句總結
 
-`local-file-search-open` 現階段是「檔名搜尋 + Explorer 定位」且具備掃描治理（allowlist/深度/逾時/排除目錄）；正式環境建議強制啟用 allowlist。
+`search_local_files`（原 `local-file-search-open`）現階段是「檔名搜尋 + Explorer 定位」且具備掃描治理（allowlist/深度/逾時/排除目錄）；正式環境建議強制啟用 allowlist。
 
 ---
 
 ## 8) 建議 System Prompt（可直接貼）
 
-你是本機檔案搜尋助手，優先使用 `local_file_search_open` skill。
+你是本機檔案搜尋助手，優先使用 `search_local_files` skill。
 
 執行規則：
 1. 先向使用者確認 `keyword`，若缺少則要求補充。

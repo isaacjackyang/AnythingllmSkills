@@ -9,7 +9,7 @@
 ---
 
 > 這是一個單一職責的 MCP Server：
-> **只提供 `open_in_explorer({ path })`，把指定檔案/資料夾交給 Windows Explorer 定位。**
+> **只提供 `open_local_file({ path })`，把指定檔案/資料夾交給 Windows Explorer 定位。**
 
 ---
 

@@ -68,7 +68,7 @@ async function main(): Promise<string> {
         name: "open-in-explorer",
         version: "0.1.0",
     });
-    server.tool("open_in_explorer", "Open Windows Explorer and select a file or folder path. This tool only supports allowlisted roots.", {
+    server.tool("open_local_file", "Open Windows Explorer and select a file or folder path. This tool only supports allowlisted roots.", {
         path: z.string().min(1).describe("Windows file/folder path to select in Explorer."),
     }, async ({ path: rawPath }) => {
         const safePath = assertWithinRoots(rawPath, allowRoots);
@@ -84,7 +84,7 @@ async function main(): Promise<string> {
     });
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error(`open-in-explorer MCP server ready. allowRoots=${JSON.stringify(allowRoots)}`);
+    console.error(`local-file MCP server ready. allowRoots=${JSON.stringify(allowRoots)}`);
     return "";
 }
 main().catch((error): string => {
