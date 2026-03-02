@@ -11,8 +11,8 @@
 
 - `gateway/`：核心後端（Node + TypeScript），負責事件路由、policy、tasks、channel control。
 - `gateway/web/approval_ui/`：Gateway 內建的審批/控制 UI（靜態頁）。
-- `anythingllm-skills/local-file-search-open/`：可直接放入 AnythingLLM 的 skill 範例（本機檔案搜尋 + 選擇性開啟 Explorer）。
-- `mcp-open-in-explorer/`：Windows-only MCP server，只做 `open_in_explorer({ path })`。
+- `anythingllm-skills/local-file-search-open/`：可直接放入 AnythingLLM 的 skill 範例，工具名稱統一為 `search_local_files`（本機檔案搜尋 + 選擇性開啟 Explorer）。
+- `mcp-open-in-explorer/`：Windows-only MCP server，只做 `open_local_file({ path })`。
 
 另外：
 
