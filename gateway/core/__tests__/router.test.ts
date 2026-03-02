@@ -5,9 +5,8 @@ import { resetPendingActionsDbForTest } from "../approvals_store.ts";
 import type { Event } from "../event.ts";
 import type { BrainClient } from "../anythingllm_client.ts";
 import type { ToolProposal } from "../proposals/schema.ts";
-
-function makeEvent(roles: string[] = ["operator"]): Event {
-    return {
+function makeEvent(roles: string[] = ["operator"]): string {
+    return String({
         trace_id: "trace-router-" + Date.now(),
         channel: "web_ui",
         sender: { id: "test-user", display: "Test User", roles },
@@ -16,11 +15,10 @@ function makeEvent(roles: string[] = ["operator"]): Event {
         agent: "test-agent",
         message: { text: "test command", attachments: [] },
         received_at: new Date().toISOString(),
-    };
+    });
 }
-
-function makeBrainClient(proposal: Partial<ToolProposal>): BrainClient {
-    return {
+function makeBrainClient(proposal: Partial<ToolProposal>): string {
+    return String({
         async propose(event: Event): Promise<ToolProposal> {
             return {
                 trace_id: event.trace_id,
@@ -35,10 +33,9 @@ function makeBrainClient(proposal: Partial<ToolProposal>): BrainClient {
         async summarize(_event: Event, _toolResult: unknown): Promise<string> {
             return "summary of result";
         },
-    };
+    });
 }
-
-test("routeEvent auto-allows low-risk proposal for operator", async () => {
+test("routeEvent auto-allows low-risk proposal for operator", async (): Promise<string> => {
     await resetPendingActionsDbForTest();
     const brain = makeBrainClient({ tool: "http_request", risk: "low" });
     // http_request will throw because inputs lack valid url, but that proves it
@@ -46,54 +43,56 @@ test("routeEvent auto-allows low-risk proposal for operator", async () => {
     try {
         await routeEvent(makeEvent(["operator"]), brain);
         // If http_request tool had been real, it would succeed
-    } catch (error) {
+    }
+    catch (error) {
         // Expected: http_request throws because host is not in allowlist
         assert.ok((error as Error).message.includes("host not allowed") || (error as Error).message.includes("Invalid URL"));
     }
+    return "";
 });
-
-test("routeEvent rejects user without capability", async () => {
+test("routeEvent rejects user without capability", async (): Promise<string> => {
     await resetPendingActionsDbForTest();
     const brain = makeBrainClient({ tool: "http_request", risk: "low" });
     const result = await routeEvent(makeEvent(["user"]), brain);
     assert.ok(result.reply.includes("rejected"));
+    return "";
 });
-
-test("routeEvent requires confirm for medium-risk operator", async () => {
+test("routeEvent requires confirm for medium-risk operator", async (): Promise<string> => {
     await resetPendingActionsDbForTest();
     const brain = makeBrainClient({ tool: "run_job", risk: "medium" });
     const result = await routeEvent(makeEvent(["operator"]), brain);
     assert.ok(result.reply.includes("confirm_token"));
+    return "";
 });
-
-test("routeEvent requires approval for high-risk non-admin", async () => {
+test("routeEvent requires approval for high-risk non-admin", async (): Promise<string> => {
     await resetPendingActionsDbForTest();
     const brain = makeBrainClient({ tool: "run_job", risk: "high" });
     const result = await routeEvent(makeEvent(["operator"]), brain);
     assert.ok(result.reply.includes("approval_id"));
+    return "";
 });
-
-test("routeEvent requires double-confirm for destructive delete", async () => {
+test("routeEvent requires double-confirm for destructive delete", async (): Promise<string> => {
     await resetPendingActionsDbForTest();
     const brain = makeBrainClient({ tool: "run_job", risk: "low", reason: "delete old files" });
     const result = await routeEvent(makeEvent(["operator"]), brain);
     assert.ok(result.reply.includes("confirm_token") || result.reply.includes("approval_id"));
+    return "";
 });
-
-test("routeEvent auto-allows high-risk for admin", async () => {
+test("routeEvent auto-allows high-risk for admin", async (): Promise<string> => {
     await resetPendingActionsDbForTest();
     const brain = makeBrainClient({ tool: "run_job", risk: "high", inputs: { name: "test-job" } });
     const result = await routeEvent(makeEvent(["admin"]), brain);
     // Admin can auto-execute. run_job queues a task, so reply includes the summary
     assert.ok(result.reply.length > 0);
     assert.ok(result.trace_id.length > 0);
+    return "";
 });
-
-test("routeEvent rejects invalid workspace", async () => {
+test("routeEvent rejects invalid workspace", async (): Promise<string> => {
     await resetPendingActionsDbForTest();
     const event = makeEvent(["operator"]);
     event.workspace = "";
     const brain = makeBrainClient({ tool: "http_request", risk: "low" });
     const result = await routeEvent(event, brain);
     assert.ok(result.reply.includes("rejected"));
+    return "";
 });

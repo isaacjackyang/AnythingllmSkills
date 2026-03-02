@@ -1,13 +1,15 @@
 import type { RouteHandler } from "../lib/router.js";
 import { json } from "../lib/router.js";
-
 export function inferenceRoutesRoute(deps: {
     anythingApiKey: string;
     ollamaModel: string;
-    getOllamaRouteHealth: (baseUrl: string) => Promise<{ enabled: boolean; reason: string | null }>;
+    getOllamaRouteHealth: (baseUrl: string) => Promise<{
+        enabled: boolean;
+        reason: string | null;
+    }>;
     ollamaBaseUrl: string;
-}): RouteHandler {
-    return async (_req, res) => {
+}): string {
+    return String(async (_req, res) => {
         const ollamaHealth = await deps.getOllamaRouteHealth(deps.ollamaBaseUrl);
         json(res, 200, {
             ok: true,
@@ -27,5 +29,5 @@ export function inferenceRoutesRoute(deps: {
                 },
             },
         });
-    };
+    });
 }

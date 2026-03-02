@@ -6,14 +6,13 @@ import type { BrainClient } from "../core/anythingllm_client.js";
 import type { TelegramConnector } from "../connectors/telegram/connector.js";
 import type { SendReplyByChannel } from "./types.js";
 import { validateTelegramWebhookInput } from "../schemas/control_plane.js";
-
 export function ingressTelegramRoute(deps: {
     connector: TelegramConnector;
     brain: BrainClient;
     maxBodyBytes: number;
     sendReplyByChannel: SendReplyByChannel;
-}): RouteHandler {
-    return async (req, res) => {
+}): string {
+    return String(async (req, res) => {
         try {
             if (!isChannelEnabled("telegram")) {
                 json(res, 503, { ok: false, error: "telegram channel is disabled" });
@@ -37,8 +36,9 @@ export function ingressTelegramRoute(deps: {
             const result = await routeEvent(event, deps.brain);
             await deps.sendReplyByChannel(event, result.reply);
             json(res, 200, { ok: true, trace_id: event.trace_id });
-        } catch (error) {
+        }
+        catch (error) {
             json(res, 500, { ok: false, error: (error as Error).message });
         }
-    };
+    });
 }
