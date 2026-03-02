@@ -5,6 +5,7 @@ import { routeEvent } from "../core/router.js";
 import type { BrainClient } from "../core/anythingllm_client.js";
 import type { LineConnector } from "../connectors/line/connector.js";
 import type { SendReplyByChannel } from "./types.js";
+import { validateLineWebhookInput } from "../schemas/control_plane.js";
 
 export function ingressLineRoute(deps: {
     lineConnector: LineConnector;
@@ -26,7 +27,13 @@ export function ingressLineRoute(deps: {
                 return;
             }
             markChannelActivity("line");
-            const event = deps.lineConnector.toEvent(JSON.parse(raw));
+            const parsed = JSON.parse(raw);
+            const validated = validateLineWebhookInput(parsed);
+            if (!validated.ok) {
+                json(res, 400, { ok: false, error: validated.error });
+                return;
+            }
+            const event = deps.lineConnector.toEvent(validated.value);
             const result = await routeEvent(event, deps.brain);
             await deps.sendReplyByChannel(event, result.reply);
             json(res, 200, { ok: true, trace_id: event.trace_id });
