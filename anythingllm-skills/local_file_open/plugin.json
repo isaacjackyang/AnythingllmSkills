@@ -1,0 +1,15 @@
+{
+  "hubId": "local_file_open",
+  "active": true,
+  "name": "local_file_open",
+  "version": "1.6.0",
+  "description": "Open a provided local file path in Windows Explorer with allowlist validation and path safety checks.",
+  "author": "AnythingllmSkills",
+  "license": "MIT",
+  "examples": [],
+  "setup_args": {},
+  "entrypoint": {
+    "file": "handler.js",
+    "params": {}
+  }
+}
