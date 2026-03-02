@@ -1,10 +1,9 @@
 {
   "hubId": "local_file_search_open",
-  "active": false,
+  "active": true,
   "name": "local_file_search_open",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Search local files by filename keyword with scope options, allowlist enforcement, guarded traversal limits, and optional Windows Explorer open for first result.",
-  "returns": "string",
   "author": "AnythingllmSkills",
   "license": "MIT",
   "examples": [],
