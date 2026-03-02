@@ -8,6 +8,7 @@ import type { BrainClient } from "../core/anythingllm_client.js";
 import type { OllamaClient } from "../core/ollama_client.js";
 import type { ResolveAgentContext } from "./types.js";
 import type { SendReplyByChannel } from "./types.js";
+import { validateAgentCommandInput } from "../schemas/control_plane.js";
 
 export function commandRoute(deps: {
     brain: BrainClient;
@@ -25,7 +26,10 @@ export function commandRoute(deps: {
                 return;
             }
             const raw = await readBody(req, deps.maxBodyBytes);
-            const payload = raw ? JSON.parse(raw) : {};
+            const parsed = raw ? JSON.parse(raw) : {};
+            const validated = validateAgentCommandInput(parsed);
+            if (!validated.ok) throw new Error(validated.error);
+            const payload = validated.value;
             const text = String(payload.text ?? "").trim();
             const path = String(payload.path ?? "anythingllm").trim();
             const context = await deps.resolveAgentContext(typeof payload.agent_id === "string" ? payload.agent_id : undefined);

@@ -1,5 +1,6 @@
 import type { RouteHandler } from "../lib/router.js";
 import { json, readBody } from "../lib/router.js";
+import { validateRunOnceInput } from "../schemas/control_plane.js";
 import { cancelTask, deleteTask, getTaskById, listTasks } from "../core/tasks/store.js";
 import { runQueuedJobsOnce } from "../workers/job_runner.js";
 import type { TaskStatus } from "../core/tasks/store.js";
@@ -58,8 +59,12 @@ export function deleteTaskRoute(): RouteHandler {
 }
 
 export function runOnceRoute(): RouteHandler {
-    return async (_req, res) => {
+    return async (req, res) => {
         try {
+            const raw = await readBody(req, 64 * 1024);
+            const parsed = raw ? JSON.parse(raw) : {};
+            const validated = validateRunOnceInput(parsed);
+            if (!validated.ok) throw new Error(validated.error);
             await runQueuedJobsOnce();
             json(res, 200, { ok: true });
         } catch (error) {

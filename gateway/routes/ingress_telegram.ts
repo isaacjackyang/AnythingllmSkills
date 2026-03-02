@@ -5,6 +5,7 @@ import { routeEvent } from "../core/router.js";
 import type { BrainClient } from "../core/anythingllm_client.js";
 import type { TelegramConnector } from "../connectors/telegram/connector.js";
 import type { SendReplyByChannel } from "./types.js";
+import { validateTelegramWebhookInput } from "../schemas/control_plane.js";
 
 export function ingressTelegramRoute(deps: {
     connector: TelegramConnector;
@@ -26,7 +27,13 @@ export function ingressTelegramRoute(deps: {
             }
             const raw = await readBody(req, deps.maxBodyBytes);
             markChannelActivity("telegram");
-            const event = deps.connector.toEvent(JSON.parse(raw));
+            const parsed = JSON.parse(raw);
+            const validated = validateTelegramWebhookInput(parsed);
+            if (!validated.ok) {
+                json(res, 400, { ok: false, error: validated.error });
+                return;
+            }
+            const event = deps.connector.toEvent(validated.value);
             const result = await routeEvent(event, deps.brain);
             await deps.sendReplyByChannel(event, result.reply);
             json(res, 200, { ok: true, trace_id: event.trace_id });

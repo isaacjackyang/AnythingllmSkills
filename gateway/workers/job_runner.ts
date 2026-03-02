@@ -1,4 +1,6 @@
 import { claimNextTask, completeTask, failTask, heartbeatTask, type TaskRecord } from "../core/tasks/store";
+import { runHttpRequest } from "../core/tools/http_request";
+import { runDbQuery } from "../core/tools/db_query";
 
 let timer: NodeJS.Timeout | undefined;
 const DEFAULT_INTERVAL_MS = 2_000;
@@ -10,17 +12,38 @@ async function executeTask(task: TaskRecord): Promise<Record<string, unknown>> {
     throw new Error("simulated task failure from payload.fail=true");
   }
 
-  // TODO: implement real task execution based on task.name / task.payload
-  console.warn(`[job_runner] task ${task.id} (${task.name}): real execution not implemented, completed as no-op`);
-
-  return {
+  const base = {
     ok: true,
-    warning: "no-op execution: real task handler not yet implemented",
     task_id: task.id,
     name: task.name,
     processed_at: new Date().toISOString(),
     trace_id: task.trace_id,
   };
+
+  if (task.name === "http_request") {
+    const result = await runHttpRequest(task.payload as { url: string; method?: string; body?: unknown });
+    return { ...base, result };
+  }
+
+  if (task.name === "db_query") {
+    const result = await runDbQuery(task.payload as { sql: string });
+    return { ...base, result };
+  }
+
+  if (task.name === "agent_task") {
+    const action = String(task.payload.action ?? "").trim();
+    if (action === "http_request") {
+      const result = await runHttpRequest(task.payload as { url: string; method?: string; body?: unknown });
+      return { ...base, action, result };
+    }
+    if (action === "db_query") {
+      const result = await runDbQuery(task.payload as { sql: string });
+      return { ...base, action, result };
+    }
+    throw new Error(`unknown agent_task action: ${action || "(empty)"}`);
+  }
+
+  throw new Error(`unknown task.name: ${task.name}`);
 }
 
 export async function runQueuedJobsOnce(): Promise<void> {

@@ -86,6 +86,22 @@ function main() {
     };
   }));
 
+  checks.push(runCheck("memory validator syntax", () => {
+    const run = runNode(["--check", "scripts/validate_memory_entries.mjs"]);
+    return {
+      ok: run.ok,
+      detail: run.ok ? "scripts/validate_memory_entries.mjs syntax ok" : (run.stderr || run.stdout || "syntax check failed").trim(),
+    };
+  }));
+
+  checks.push(runCheck("memory entries validation", () => {
+    const run = runNode(["scripts/validate_memory_entries.mjs"]);
+    return {
+      ok: run.ok,
+      detail: (run.stdout || run.stderr || "memory validation failed").trim(),
+    };
+  }));
+
   checks.push(runCheck("gateway live smoke contract", () => {
     const run = runNode(["scripts/smoke_gateway_contract.mjs", "--base-url", args.baseUrl]);
 
