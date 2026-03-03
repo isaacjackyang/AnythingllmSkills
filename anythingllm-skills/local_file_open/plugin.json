@@ -52,8 +52,8 @@
         "description": "Optional. Defaults to true. Set false to only validate path without opening Explorer."
       },
       "allowlistRoots": {
-        "type": "array",
-        "description": "Optional allowlist root paths. If omitted, LOCAL_FILE_SEARCH_ALLOWLIST env var is used when available."
+        "type": "string",
+        "description": "Optional. Semicolon or comma-separated allowlist root paths. If omitted, LOCAL_FILE_SEARCH_ALLOWLIST env var is used when available."
       }
     }
   }
