@@ -1,60 +1,38 @@
 {
-  "hubId": "local_file_open",
   "active": true,
-  "imported": true,
+  "hubId": "local_file_open",
   "name": "local_file_open",
-  "version": "2.0.0",
-  "description": "Open a provided local file path in Windows Explorer with allowlist validation and path safety checks.",
-  "author": "AnythingllmSkills",
+  "schema": "skill-1.0.0",
+  "version": "1.0.0",
+  "description": "Open Windows File Explorer to a folder or reveal a file by path.",
+  "author": "OpenAI",
   "license": "MIT",
   "examples": [
     {
-      "prompt": "幫我在 Explorer 定位這個檔案：C:\\Users\\USER\\Downloads\\gpt-oss-20b-modelfile.txt",
-      "call": {
-        "filePath": "C:\\Users\\USER\\Downloads\\gpt-oss-20b-modelfile.txt",
-        "openExplorer": true
-      }
+      "prompt": "打開 D:\\KM資料庫 這個資料夾",
+      "call": "{\"path\":\"D:\\\\KM資料庫\",\"mode\":\"open\"}"
     },
     {
-      "prompt": "Open the file C:\\Projects\\report.docx in Explorer",
-      "call": {
-        "filePath": "C:\\Projects\\report.docx"
-      }
+      "prompt": "在檔案總管顯示並選取 D:\\KM資料庫\\切割機\\規格書.pdf",
+      "call": "{\"path\":\"D:\\\\KM資料庫\\\\切割機\\\\規格書.pdf\",\"mode\":\"select\"}"
     },
     {
-      "prompt": "Show me where this file is: D:\\Data\\output.csv",
-      "call": {
-        "filePath": "D:\\Data\\output.csv"
-      }
-    },
-    {
-      "prompt": "幫我打開這個路徑 C:\\Users\\USER\\Desktop\\notes.txt",
-      "call": {
-        "filePath": "C:\\Users\\USER\\Desktop\\notes.txt",
-        "openExplorer": true
-      }
+      "prompt": "幫我打開 C:\\Users\\USER\\Desktop",
+      "call": "{\"path\":\"C:\\\\Users\\\\USER\\\\Desktop\",\"mode\":\"open\"}"
     }
   ],
-  "setup_args": {},
   "entrypoint": {
     "file": "handler.js",
     "params": {
-      "filePath": {
-        "type": "string",
-        "description": "Required. Absolute local file path to validate and open in Windows Explorer."
-      },
       "path": {
-        "type": "string",
-        "description": "Alias of filePath for compatibility."
+        "description": "Absolute Windows path to a file or folder that should be opened in File Explorer.",
+        "type": "string"
       },
-      "openExplorer": {
-        "type": "boolean",
-        "description": "Optional. Defaults to true. Set false to only validate path without opening Explorer."
-      },
-      "allowlistRoots": {
-        "type": "string",
-        "description": "Optional. Semicolon or comma-separated allowlist root paths. If omitted, LOCAL_FILE_SEARCH_ALLOWLIST env var is used when available."
+      "mode": {
+        "description": "Use 'open' to open a folder or parent folder, or 'select' to reveal and select a file or folder.",
+        "type": "string"
       }
     }
-  }
+  },
+  "imported": true
 }
