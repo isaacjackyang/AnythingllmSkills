@@ -4,6 +4,18 @@ const { spawn } = require('child_process');
 
 const IS_WINDOWS = process.platform === 'win32';
 
+function parseBoolean(value, defaultValue) {
+  if (value === undefined || value === null || value === '') return defaultValue;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+
+  const normalized = String(value).trim().toLowerCase();
+  if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'n', 'off'].includes(normalized)) return false;
+
+  return defaultValue;
+}
+
 function toCanonicalPath(targetPath) {
   try {
     return fs.realpathSync.native(targetPath);
@@ -34,7 +46,9 @@ function getAllowlistRoots(inputAllowlistRoots) {
 }
 
 function isPathUnderRoot(targetPath, rootPath) {
-  const relative = path.relative(rootPath, targetPath);
+  const normalizedRoot = IS_WINDOWS ? rootPath.toLowerCase() : rootPath;
+  const normalizedTarget = IS_WINDOWS ? targetPath.toLowerCase() : targetPath;
+  const relative = path.relative(normalizedRoot, normalizedTarget);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
@@ -67,23 +81,30 @@ function openInExplorer(filePath) {
   }
 
   return new Promise((resolve) => {
-    try {
-      const explorerArgs = [`/select,${filePath}`];
-      const child = spawn('explorer.exe', explorerArgs, {
-        detached: true,
-        stdio: 'ignore'
-      });
+    const explorerArgs = [`/select,${filePath}`];
+    const child = spawn('explorer.exe', explorerArgs, {
+      detached: true,
+      stdio: 'ignore'
+    });
+
+    let settled = false;
+    child.once('error', (error) => {
+      settled = true;
+      resolve({ opened: false, error: error.message });
+    });
+
+    // If spawn succeeds, resolve on next tick unless an error event arrives first.
+    setImmediate(() => {
+      if (settled) return;
       child.unref();
       resolve({ opened: true, target: filePath });
-    } catch (error) {
-      resolve({ opened: false, error: error.message });
-    }
+    });
   });
 }
 
 async function execute(input = {}, logger) {
   const filePathInput = String(input.filePath || input.path || '').trim();
-  const openExplorer = input.openExplorer === undefined ? true : Boolean(input.openExplorer);
+  const openExplorer = parseBoolean(input.openExplorer, true);
   const allowlist = getAllowlistRoots(input.allowlistRoots);
 
   if (!filePathInput) {
@@ -101,7 +122,16 @@ async function execute(input = {}, logger) {
     };
   }
 
-  const stats = fs.statSync(filePathInput);
+  let stats;
+  try {
+    stats = fs.statSync(filePathInput);
+  } catch (error) {
+    return {
+      ok: false,
+      filePath: filePathInput,
+      message: `Unable to stat target path: ${error.message}`
+    };
+  }
   if (!stats.isFile()) {
     return {
       ok: false,
