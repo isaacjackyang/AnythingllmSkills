@@ -64,7 +64,7 @@ function getAllowlistRoots(inputAllowlistRoots) {
 
   const roots = [];
   for (const item of raw) {
-    if (!item || !fs.existsSync(item)) continue;
+    if (!item) continue;
     roots.push(toCanonicalPath(item));
   }
 
@@ -76,12 +76,13 @@ function getAllowlistRoots(inputAllowlistRoots) {
 }
 
 function isPathUnderRoot(targetPath, rootPath) {
-  const normalizedRoot = normalizeFsPath(rootPath);
-  const normalizedTarget = normalizeFsPath(targetPath);
+  const normalizedRoot = toCanonicalPath(rootPath);
+  const normalizedTarget = toCanonicalPath(targetPath);
   const comparableRoot = IS_WINDOWS ? normalizedRoot.toLowerCase() : normalizedRoot;
   const comparableTarget = IS_WINDOWS ? normalizedTarget.toLowerCase() : normalizedTarget;
   const relative = path.relative(comparableRoot, comparableTarget);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+  const firstSegment = relative.split(path.sep)[0];
+  return relative === '' || (firstSegment !== '..' && !path.isAbsolute(relative));
 }
 
 function validatePathAgainstAllowlist(filePath, allowlist) {
@@ -113,25 +114,39 @@ function openInExplorer(filePath) {
   }
 
   return new Promise((resolve) => {
-    const quotedPath = `"${String(filePath).replace(/"/g, '\"')}"`;
-    const explorerArgs = [`/select,${quotedPath}`];
+    if (!fs.existsSync(filePath)) {
+      resolve({ opened: false, error: `Target path does not exist: ${filePath}` });
+      return;
+    }
+
+    const explorerArgs = [`/select,${String(filePath)}`];
     const child = spawn('explorer.exe', explorerArgs, {
       detached: true,
       stdio: 'ignore'
     });
+    child.unref();
 
     let settled = false;
-    child.once('error', (error) => {
+    let spawnCheckTimer = null;
+    const settle = (result) => {
+      if (settled) return;
       settled = true;
-      resolve({ opened: false, error: error.message });
+      if (spawnCheckTimer) clearTimeout(spawnCheckTimer);
+      resolve(result);
+    };
+
+    child.once('error', (error) => {
+      settle({ opened: false, error: error.message });
     });
 
-    // If spawn succeeds, resolve on next tick unless an error event arrives first.
-    setImmediate(() => {
-      if (settled) return;
-      child.unref();
-      resolve({ opened: true, target: filePath });
+    child.once('spawn', () => {
+      settle({ opened: true, target: filePath });
     });
+
+    // Older runtimes may not emit `spawn`; keep a delayed fallback to avoid false positives.
+    spawnCheckTimer = setTimeout(() => {
+      settle({ opened: true, target: filePath });
+    }, 100);
   });
 }
 
@@ -242,14 +257,14 @@ async function execute(input = {}, logger) {
 
 async function handler(arg1 = {}, arg2) {
   if (arguments.length > 1) {
-    return execute(normalizeInput(arg1), arg2);
+    return execute(arg1, arg2);
   }
 
   if (arg1 && typeof arg1 === 'object' && !Array.isArray(arg1) && ('input' in arg1 || 'logger' in arg1)) {
-    return execute(normalizeInput(arg1.input), arg1.logger);
+    return execute(arg1.input, arg1.logger);
   }
 
-  return execute(normalizeInput(arg1), undefined);
+  return execute(arg1, undefined);
 
 }
 
