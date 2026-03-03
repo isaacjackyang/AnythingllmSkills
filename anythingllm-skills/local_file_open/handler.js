@@ -34,9 +34,11 @@ function normalizeInput(rawInput) {
   return {};
 }
 
+
 function normalizeFsPath(inputPath) {
   return path.normalize(String(inputPath || ''));
 }
+
 
 function toCanonicalPath(targetPath) {
   const resolved = normalizeFsPath(path.resolve(String(targetPath || '')));
@@ -248,6 +250,7 @@ async function handler(arg1 = {}, arg2) {
   }
 
   return execute(normalizeInput(arg1), undefined);
+
 }
 
 // Export in multiple CJS-compatible shapes so different runtimes can load this
