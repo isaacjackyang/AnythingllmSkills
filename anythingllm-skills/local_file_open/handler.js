@@ -1,8 +1,19 @@
+// local_file_open – AnythingLLM custom agent skill
+// Validates a local file path and optionally opens it in Windows Explorer.
+//
+// Contract:
+//   module.exports.runtime = { handler }
+//   handler MUST return a **string** (AnythingLLM requirement).
+
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 
 const IS_WINDOWS = process.platform === 'win32';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function parseBoolean(value, defaultValue) {
   if (value === undefined || value === null || value === '') return defaultValue;
@@ -22,23 +33,9 @@ function asTrimmedString(value) {
   return '';
 }
 
-function normalizeInput(rawInput) {
-  if (rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput)) {
-    return rawInput;
-  }
-
-  if (typeof rawInput === 'string' || typeof rawInput === 'number') {
-    return { filePath: String(rawInput) };
-  }
-
-  return {};
-}
-
-
 function normalizeFsPath(inputPath) {
   return path.normalize(String(inputPath || ''));
 }
-
 
 function toCanonicalPath(targetPath) {
   const resolved = normalizeFsPath(path.resolve(String(targetPath || '')));
@@ -58,9 +55,9 @@ function getAllowlistRoots(inputAllowlistRoots) {
   const raw = Array.isArray(allowlistRootsCandidate)
     ? allowlistRootsCandidate
     : String(allowlistRootsCandidate || process.env.LOCAL_FILE_SEARCH_ALLOWLIST || '')
-        .split(/[;,\n]/)
-        .map((item) => item.trim())
-        .filter(Boolean);
+      .split(/[;,\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
 
   const roots = [];
   for (const item of raw) {
@@ -143,23 +140,26 @@ function openInExplorer(filePath) {
       settle({ opened: true, target: filePath });
     });
 
-    // Older runtimes may not emit `spawn`; keep a delayed fallback to avoid false positives.
+    // Older runtimes may not emit `spawn`; keep a delayed fallback.
     spawnCheckTimer = setTimeout(() => {
       settle({ opened: true, target: filePath });
     }, 100);
   });
 }
 
-async function execute(input = {}, logger) {
-  const normalized = normalizeInput(input);
+// ---------------------------------------------------------------------------
+// Core execution logic (returns an object – internal use / testability)
+// ---------------------------------------------------------------------------
+
+async function execute(params = {}) {
   const filePathInput =
-    asTrimmedString(normalized.filePath) ||
-    asTrimmedString(normalized.path) ||
-    asTrimmedString(normalized.filepath) ||
-    asTrimmedString(normalized.targetPath) ||
-    asTrimmedString(normalized.target);
-  const openExplorer = parseBoolean(normalized.openExplorer, true);
-  const allowlist = getAllowlistRoots(normalized.allowlistRoots);
+    asTrimmedString(params.filePath) ||
+    asTrimmedString(params.path) ||
+    asTrimmedString(params.filepath) ||
+    asTrimmedString(params.targetPath) ||
+    asTrimmedString(params.target);
+  const openExplorer = parseBoolean(params.openExplorer, true);
+  const allowlist = getAllowlistRoots(params.allowlistRoots);
 
   if (!filePathInput) {
     return {
@@ -218,13 +218,13 @@ async function execute(input = {}, logger) {
 
   const warnings = [];
   if (!allowlist.enabled) {
-    warnings.push('Allowlist is disabled. Consider setting allowlistRoots or LOCAL_FILE_SEARCH_ALLOWLIST for production.');
+    warnings.push('Allowlist is disabled.');
   }
   if (!IS_WINDOWS) {
     warnings.push('Explorer open is only supported on Windows hosts.');
   }
 
-  const response = {
+  return {
     ok: true,
     filePath: canonicalPath,
     directoryPath: dirPath,
@@ -238,43 +238,46 @@ async function execute(input = {}, logger) {
     message:
       openExplorer
         ? explorerResult && explorerResult.opened
-          ? 'Opened Explorer for the target file.'
+          ? `Opened Explorer for: ${canonicalPath}`
           : 'Could not open Explorer on this host.'
-        : 'Validated target file path.'
+        : `Validated target file path: ${canonicalPath}`
   };
-
-  if (logger && typeof logger.info === 'function') {
-    logger.info('local_file_open completed', {
-      ok: response.ok,
-      filePath: response.filePath,
-      openExplorer,
-      allowlistEnabled: allowlist.enabled
-    });
-  }
-
-  return response;
 }
 
-async function handler(arg1 = {}, arg2) {
-  if (arguments.length > 1) {
-    return execute(arg1, arg2);
+// ---------------------------------------------------------------------------
+// AnythingLLM runtime handler
+//   - Receives flat params from plugin.json entrypoint.params
+//   - MUST return a string (AnythingLLM contract)
+//   - `this.introspect` / `this.logger` are available via aibitat context
+// ---------------------------------------------------------------------------
+
+module.exports.runtime = {
+  handler: async function (params = {}) {
+    try {
+      // `this.introspect` is injected by AnythingLLM to show "thoughts" in UI
+      if (this && typeof this.introspect === 'function') {
+        const target = params.filePath || params.path || '(unknown)';
+        this.introspect(`local_file_open: processing "${target}" …`);
+      }
+
+      const result = await execute(params);
+
+      if (this && typeof this.introspect === 'function') {
+        if (result.ok) {
+          this.introspect(`local_file_open: ${result.message}`);
+        } else {
+          this.introspect(`local_file_open: failed — ${result.message}`);
+        }
+      }
+
+      // AnythingLLM requires a string return value
+      return JSON.stringify(result);
+    } catch (error) {
+      const errorResult = {
+        ok: false,
+        message: `local_file_open encountered an error: ${error.message}`
+      };
+      return JSON.stringify(errorResult);
+    }
   }
-
-  if (arg1 && typeof arg1 === 'object' && !Array.isArray(arg1) && ('input' in arg1 || 'logger' in arg1)) {
-    return execute(arg1.input, arg1.logger);
-  }
-
-  return execute(arg1, undefined);
-
-}
-
-// Export in multiple CJS-compatible shapes so different runtimes can load this
-// skill whether they expect `module.handler(...)`, a default export, or a
-// callable function export with properties.
-module.exports = handler;
-module.exports.handler = handler;
-module.exports.execute = execute;
-module.exports.default = {
-  handler,
-  execute
 };
