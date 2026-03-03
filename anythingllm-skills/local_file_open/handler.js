@@ -205,7 +205,13 @@ async function handler({ input, logger } = {}) {
   return execute(input || {}, logger);
 }
 
-module.exports = {
+// Export in multiple CJS-compatible shapes so different runtimes can load this
+// skill whether they expect `module.handler(...)`, a default export, or a
+// callable function export with properties.
+module.exports = handler;
+module.exports.handler = handler;
+module.exports.execute = execute;
+module.exports.default = {
   handler,
   execute
 };
