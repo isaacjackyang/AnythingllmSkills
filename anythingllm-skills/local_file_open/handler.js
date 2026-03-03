@@ -34,11 +34,18 @@ function normalizeInput(rawInput) {
   return {};
 }
 
+
+function normalizeFsPath(inputPath) {
+  return path.normalize(String(inputPath || ''));
+}
+
+
 function toCanonicalPath(targetPath) {
+  const resolved = normalizeFsPath(path.resolve(String(targetPath || '')));
   try {
-    return fs.realpathSync.native(targetPath);
+    return normalizeFsPath(fs.realpathSync.native(resolved));
   } catch (_) {
-    return path.resolve(targetPath);
+    return resolved;
   }
 }
 
@@ -69,9 +76,11 @@ function getAllowlistRoots(inputAllowlistRoots) {
 }
 
 function isPathUnderRoot(targetPath, rootPath) {
-  const normalizedRoot = IS_WINDOWS ? rootPath.toLowerCase() : rootPath;
-  const normalizedTarget = IS_WINDOWS ? targetPath.toLowerCase() : targetPath;
-  const relative = path.relative(normalizedRoot, normalizedTarget);
+  const normalizedRoot = normalizeFsPath(rootPath);
+  const normalizedTarget = normalizeFsPath(targetPath);
+  const comparableRoot = IS_WINDOWS ? normalizedRoot.toLowerCase() : normalizedRoot;
+  const comparableTarget = IS_WINDOWS ? normalizedTarget.toLowerCase() : normalizedTarget;
+  const relative = path.relative(comparableRoot, comparableTarget);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
@@ -104,7 +113,8 @@ function openInExplorer(filePath) {
   }
 
   return new Promise((resolve) => {
-    const explorerArgs = [`/select,${filePath}`];
+    const quotedPath = `"${String(filePath).replace(/"/g, '\"')}"`;
+    const explorerArgs = [`/select,${quotedPath}`];
     const child = spawn('explorer.exe', explorerArgs, {
       detached: true,
       stdio: 'ignore'
@@ -230,16 +240,17 @@ async function execute(input = {}, logger) {
   return response;
 }
 
-async function handler({ input, logger } = {}) {
+async function handler(arg1 = {}, arg2) {
   if (arguments.length > 1) {
-    return execute(normalizeInput(arguments[0]), arguments[1]);
+    return execute(normalizeInput(arg1), arg2);
   }
 
-  if (input !== undefined || logger !== undefined) {
-    return execute(normalizeInput(input), logger);
+  if (arg1 && typeof arg1 === 'object' && !Array.isArray(arg1) && ('input' in arg1 || 'logger' in arg1)) {
+    return execute(normalizeInput(arg1.input), arg1.logger);
   }
 
-  return execute(normalizeInput(arguments[0]), undefined);
+  return execute(normalizeInput(arg1), undefined);
+
 }
 
 // Export in multiple CJS-compatible shapes so different runtimes can load this
