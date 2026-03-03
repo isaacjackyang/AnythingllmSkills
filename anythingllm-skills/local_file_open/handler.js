@@ -16,18 +16,46 @@ function parseBoolean(value, defaultValue) {
   return defaultValue;
 }
 
+function asTrimmedString(value) {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number') return String(value);
+  return '';
+}
+
+function normalizeInput(rawInput) {
+  if (rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput)) {
+    return rawInput;
+  }
+
+  if (typeof rawInput === 'string' || typeof rawInput === 'number') {
+    return { filePath: String(rawInput) };
+  }
+
+  return {};
+}
+
+function normalizeFsPath(inputPath) {
+  return path.normalize(String(inputPath || ''));
+}
+
 function toCanonicalPath(targetPath) {
+  const resolved = normalizeFsPath(path.resolve(String(targetPath || '')));
   try {
-    return fs.realpathSync.native(targetPath);
+    return normalizeFsPath(fs.realpathSync.native(resolved));
   } catch (_) {
-    return path.resolve(targetPath);
+    return resolved;
   }
 }
 
 function getAllowlistRoots(inputAllowlistRoots) {
-  const raw = Array.isArray(inputAllowlistRoots)
-    ? inputAllowlistRoots
-    : String(inputAllowlistRoots || process.env.LOCAL_FILE_SEARCH_ALLOWLIST || '')
+  const allowlistRootsCandidate =
+    inputAllowlistRoots && typeof inputAllowlistRoots === 'object' && !Array.isArray(inputAllowlistRoots)
+      ? inputAllowlistRoots.roots || inputAllowlistRoots.paths || ''
+      : inputAllowlistRoots;
+
+  const raw = Array.isArray(allowlistRootsCandidate)
+    ? allowlistRootsCandidate
+    : String(allowlistRootsCandidate || process.env.LOCAL_FILE_SEARCH_ALLOWLIST || '')
         .split(/[;,\n]/)
         .map((item) => item.trim())
         .filter(Boolean);
@@ -46,9 +74,11 @@ function getAllowlistRoots(inputAllowlistRoots) {
 }
 
 function isPathUnderRoot(targetPath, rootPath) {
-  const normalizedRoot = IS_WINDOWS ? rootPath.toLowerCase() : rootPath;
-  const normalizedTarget = IS_WINDOWS ? targetPath.toLowerCase() : targetPath;
-  const relative = path.relative(normalizedRoot, normalizedTarget);
+  const normalizedRoot = normalizeFsPath(rootPath);
+  const normalizedTarget = normalizeFsPath(targetPath);
+  const comparableRoot = IS_WINDOWS ? normalizedRoot.toLowerCase() : normalizedRoot;
+  const comparableTarget = IS_WINDOWS ? normalizedTarget.toLowerCase() : normalizedTarget;
+  const relative = path.relative(comparableRoot, comparableTarget);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
@@ -81,7 +111,8 @@ function openInExplorer(filePath) {
   }
 
   return new Promise((resolve) => {
-    const explorerArgs = [`/select,${filePath}`];
+    const quotedPath = `"${String(filePath).replace(/"/g, '\"')}"`;
+    const explorerArgs = [`/select,${quotedPath}`];
     const child = spawn('explorer.exe', explorerArgs, {
       detached: true,
       stdio: 'ignore'
@@ -103,9 +134,15 @@ function openInExplorer(filePath) {
 }
 
 async function execute(input = {}, logger) {
-  const filePathInput = String(input.filePath || input.path || '').trim();
-  const openExplorer = parseBoolean(input.openExplorer, true);
-  const allowlist = getAllowlistRoots(input.allowlistRoots);
+  const normalized = normalizeInput(input);
+  const filePathInput =
+    asTrimmedString(normalized.filePath) ||
+    asTrimmedString(normalized.path) ||
+    asTrimmedString(normalized.filepath) ||
+    asTrimmedString(normalized.targetPath) ||
+    asTrimmedString(normalized.target);
+  const openExplorer = parseBoolean(normalized.openExplorer, true);
+  const allowlist = getAllowlistRoots(normalized.allowlistRoots);
 
   if (!filePathInput) {
     return {
@@ -201,8 +238,16 @@ async function execute(input = {}, logger) {
   return response;
 }
 
-async function handler({ input, logger } = {}) {
-  return execute(input || {}, logger);
+async function handler(arg1 = {}, arg2) {
+  if (arguments.length > 1) {
+    return execute(normalizeInput(arg1), arg2);
+  }
+
+  if (arg1 && typeof arg1 === 'object' && !Array.isArray(arg1) && ('input' in arg1 || 'logger' in arg1)) {
+    return execute(normalizeInput(arg1.input), arg1.logger);
+  }
+
+  return execute(normalizeInput(arg1), undefined);
 }
 
 // Export in multiple CJS-compatible shapes so different runtimes can load this

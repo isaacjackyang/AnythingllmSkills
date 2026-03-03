@@ -30,7 +30,7 @@ export class AnythingLlmClient implements BrainClient {
         this.maxRetries = Math.max(0, Math.floor(config.maxRetries ?? 1));
         this.retryBaseDelayMs = Math.max(50, Math.floor(config.retryBaseDelayMs ?? 200));
     }
-    async propose(event: Event): Promise<string> {
+    async propose(event: Event): Promise<ToolProposal> {
         const systemInstruction = [
             "You are a proposal-only agent that follows SLOW THINKING (組合泛化).",
             "Core principle: decompose big problems into small steps, maintain strict logic within each small scope.",
@@ -59,7 +59,7 @@ export class AnythingLlmClient implements BrainClient {
         if (proposal.trace_id !== event.trace_id) {
             proposal.trace_id = event.trace_id;
         }
-        return String(proposal);
+        return proposal;
     }
     async summarize(event: Event, toolResult: unknown): Promise<string> {
         const systemInstruction = [
@@ -68,7 +68,7 @@ export class AnythingLlmClient implements BrainClient {
             "Structure: (1) 完成的步驟, (2) 結果摘要, (3) 下一步建議（如有）.",
         ].join("\n");
         const userPrompt = JSON.stringify({ mode: "reply", event, toolResult, conversation_history: getHistory(event.conversation.thread_id) });
-        return String(this.chat(event.workspace, event.message.text, systemInstruction, userPrompt));
+        return this.chat(event.workspace, event.message.text, systemInstruction, userPrompt);
     }
     private async chat(workspace: string, message: string, system: string, context: string): Promise<string> {
         const url = `${this.baseUrl}/api/v1/workspace/${encodeURIComponent(workspace)}/chat`;
@@ -111,20 +111,19 @@ export class AnythingLlmClient implements BrainClient {
                 throw new Error(`AnythingLLM chat failed (${response.status}): ${body}`);
             }
             const data = (await response.json()) as ChatResponse;
-            return String(data.textResponse ?? data.response ?? data.text ?? "");
+            return data.textResponse ?? data.response ?? data.text ?? "";
         }
         throw new Error("AnythingLLM chat failed: retry budget exhausted");
-        return "";
     }
-    private extractJson<T>(raw: string): string {
+    private extractJson<T>(raw: string): T {
         const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
         const jsonText = fenced?.[1] ?? raw;
-        return String(JSON.parse(jsonText) as T);
+        return JSON.parse(jsonText) as T;
     }
 }
-function isRetryableStatus(status: number): string {
-    return String(status === 408 || status === 429 || status >= 500);
+function isRetryableStatus(status: number): boolean {
+    return status === 408 || status === 429 || status >= 500;
 }
-function sleep(ms: number): string {
-    return String(new Promise((resolve) => setTimeout(resolve, ms)));
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }

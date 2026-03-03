@@ -8,17 +8,22 @@ import { runDbQuery } from "./tools/db_query";
 import { queueJob } from "./tools/queue_job";
 import type { BrainClient } from "./anythingllm_client";
 import { recordLearning } from "./memory/evolution";
-import { addTurn, getHistory } from "./conversation_store";
+import { addTurn } from "./conversation_store";
 import { sendAgentMessage } from "./agent_messaging";
 import { consumeConfirmToken, createPendingAction, markPendingActionExecuted, type PendingAction, } from "./approvals_store";
+export interface RouteEventResult {
+    trace_id: string;
+    reply: string;
+}
+
 export async function routeEvent(event: Event, brain: BrainClient, options: {
     confirm_token?: string;
-} = {}): Promise<string> {
+} = {}): Promise<RouteEventResult> {
     logStage(event.trace_id, "event", { channel: event.channel, sender: event.sender.id, workspace: event.workspace, agent: event.agent });
     if (options.confirm_token) {
         const approved = await consumeConfirmToken(options.confirm_token, event.sender.id);
         if (!approved) {
-            return String({ trace_id: event.trace_id, reply: "❌ confirm token 無效、過期、已使用，或尚未完成審批" });
+            return { trace_id: event.trace_id, reply: "❌ confirm token 無效、過期、已使用，或尚未完成審批" };
         }
         const execution = await executeProposal(approved.proposal, event.agent);
         await markPendingActionExecuted(approved.id);
@@ -34,7 +39,7 @@ export async function routeEvent(event: Event, brain: BrainClient, options: {
             pending_action_id: approved.id,
             execution,
         });
-        return String({ trace_id: event.trace_id, reply });
+        return { trace_id: event.trace_id, reply };
     }
     // Record user message in conversation history (P3-A)
     addTurn(event.conversation.thread_id, "user", event.message.text);
@@ -48,7 +53,7 @@ export async function routeEvent(event: Event, brain: BrainClient, options: {
     const policy = evaluatePolicy(event, proposal);
     logStage(event.trace_id, "decision", { ...policy });
     if (policy.decision === "reject")
-        return String({ trace_id: event.trace_id, reply: `❌ rejected: ${policy.reason}` });
+        return { trace_id: event.trace_id, reply: `❌ rejected: ${policy.reason}` };
     if (policy.decision === "need-approval") {
         const pending = await createPendingAction({
             type: "approval",
@@ -60,10 +65,10 @@ export async function routeEvent(event: Event, brain: BrainClient, options: {
             requires_confirm_token: false,
             dry_run_plan: buildDryRunPlan(proposal),
         });
-        return String({
+        return {
             trace_id: event.trace_id,
             reply: `⏳ 高風險操作已送審。approval_id=${pending.id}`,
-        });
+        };
     }
     if (policy.decision === "need-double-confirm") {
         const pending = await createPendingAction({
@@ -76,10 +81,10 @@ export async function routeEvent(event: Event, brain: BrainClient, options: {
             requires_confirm_token: true,
             dry_run_plan: buildDryRunPlan(proposal),
         });
-        return String({
+        return {
             trace_id: event.trace_id,
             reply: `🛑 刪除/格式化屬高敏感操作，需雙重確認：先審批 approval_id=${pending.id}，再用 confirm_token=${pending.confirm_token} 執行。`,
-        });
+        };
     }
     if (policy.decision === "need-confirm") {
         const pending = await createPendingAction({
@@ -92,10 +97,10 @@ export async function routeEvent(event: Event, brain: BrainClient, options: {
             requires_confirm_token: true,
             dry_run_plan: buildDryRunPlan(proposal),
         });
-        return String({
+        return {
             trace_id: event.trace_id,
             reply: `🧪 已產生 dry-run 計畫，請帶 confirm_token 再送一次 /api/agent/command。confirm_token=${pending.confirm_token}`,
-        });
+        };
     }
     let execution: Record<string, unknown>;
     try {
@@ -122,35 +127,35 @@ export async function routeEvent(event: Event, brain: BrainClient, options: {
     const reply = await brain.summarize(event, execution);
     addTurn(event.conversation.thread_id, "assistant", reply);
     logStage(event.trace_id, "outbound", { reply });
-    return String({ trace_id: event.trace_id, reply });
+    return { trace_id: event.trace_id, reply };
 }
-export async function executeApprovedAction(action: PendingAction): Promise<string> {
+export async function executeApprovedAction(action: PendingAction): Promise<Record<string, unknown>> {
     if (action.requires_confirm_token) {
         throw new Error("this action also requires confirm_token; do not execute directly after approval");
     }
     const execution = await executeProposal(action.proposal, action.event.agent);
     await markPendingActionExecuted(action.id);
-    return String(execution);
+    return execution;
 }
-function buildDryRunPlan(proposal: ToolProposal): string {
-    return String({
+function buildDryRunPlan(proposal: ToolProposal): Record<string, unknown> {
+    return {
         tool: proposal.tool,
         risk: proposal.risk,
         reason: proposal.reason,
         input_keys: Object.keys(proposal.inputs ?? {}),
         trace_id: proposal.trace_id,
-    });
+    };
 }
-async function executeProposal(proposal: ToolProposal, agentId?: string): Promise<string> {
+async function executeProposal(proposal: ToolProposal, agentId?: string): Promise<Record<string, unknown>> {
     switch (proposal.tool) {
         case "http_request":
-            return String(runHttpRequest(proposal.inputs as {
+            return runHttpRequest(proposal.inputs as {
                 url: string;
                 method?: string;
                 body?: unknown;
-            }));
+            });
         case "run_job":
-            return String(queueJob({
+            return queueJob({
                 name: String((proposal.inputs?.name as string | undefined) ?? "agent_task"),
                 payload: (proposal.inputs?.payload as Record<string, unknown> | undefined) ?? {},
                 trace_id: proposal.trace_id,
@@ -159,11 +164,11 @@ async function executeProposal(proposal: ToolProposal, agentId?: string): Promis
                 max_attempts: Number(proposal.inputs?.max_attempts ?? 3),
                 scheduled_at: typeof proposal.inputs?.scheduled_at === "string" ? (proposal.inputs.scheduled_at as string) : undefined,
                 agent_id: agentId,
-            }));
+            });
         case "db_query":
-            return String(runDbQuery(proposal.inputs as {
+            return runDbQuery(proposal.inputs as {
                 sql: string;
-            }));
+            });
         case "send_message":
             throw new Error("send_message tool is not yet implemented. Configure a messaging provider to enable this tool.");
         case "shell_command":
@@ -174,10 +179,9 @@ async function executeProposal(proposal: ToolProposal, agentId?: string): Promis
             if (!toAgentId)
                 throw new Error("forward_to_agent requires to_agent_id");
             const msg = sendAgentMessage(agentId ?? "primary", toAgentId, content, { trace_id: proposal.trace_id });
-            return String({ forwarded: true, message_id: msg.id, to_agent_id: toAgentId });
+            return { forwarded: true, message_id: msg.id, to_agent_id: toAgentId };
         }
         default:
             throw new Error(`unsupported tool: ${proposal.tool}`);
     }
-    return "";
 }
