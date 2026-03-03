@@ -2,14 +2,39 @@
   "hubId": "local_file_open",
   "active": true,
   "name": "local_file_open",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Open a provided local file path in Windows Explorer with allowlist validation and path safety checks.",
   "author": "AnythingllmSkills",
   "license": "MIT",
-  "examples": [],
+  "examples": [
+    {
+      "prompt": "幫我在 Explorer 定位這個檔案：C:\\Users\\USER\\Downloads\\gpt-oss-20b-modelfile.txt",
+      "call": {
+        "filePath": "C:\\Users\\USER\\Downloads\\gpt-oss-20b-modelfile.txt",
+        "openExplorer": true
+      }
+    }
+  ],
   "setup_args": {},
   "entrypoint": {
     "file": "handler.js",
-    "params": {}
+    "params": {
+      "filePath": {
+        "type": "string",
+        "description": "Required. Absolute or relative local file path to validate and open in Windows Explorer."
+      },
+      "path": {
+        "type": "string",
+        "description": "Alias of filePath for compatibility with MCP tool calls."
+      },
+      "openExplorer": {
+        "type": "boolean",
+        "description": "Optional. Defaults to true. Set false to only validate path and allowlist without opening Explorer."
+      },
+      "allowlistRoots": {
+        "type": "array",
+        "description": "Optional allowlist root paths. If omitted, LOCAL_FILE_SEARCH_ALLOWLIST is used when available."
+      }
+    }
   }
 }
