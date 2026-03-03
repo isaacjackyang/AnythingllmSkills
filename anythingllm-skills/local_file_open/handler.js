@@ -16,6 +16,24 @@ function parseBoolean(value, defaultValue) {
   return defaultValue;
 }
 
+function asTrimmedString(value) {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number') return String(value);
+  return '';
+}
+
+function normalizeInput(rawInput) {
+  if (rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput)) {
+    return rawInput;
+  }
+
+  if (typeof rawInput === 'string' || typeof rawInput === 'number') {
+    return { filePath: String(rawInput) };
+  }
+
+  return {};
+}
+
 function toCanonicalPath(targetPath) {
   try {
     return fs.realpathSync.native(targetPath);
@@ -25,9 +43,14 @@ function toCanonicalPath(targetPath) {
 }
 
 function getAllowlistRoots(inputAllowlistRoots) {
-  const raw = Array.isArray(inputAllowlistRoots)
-    ? inputAllowlistRoots
-    : String(inputAllowlistRoots || process.env.LOCAL_FILE_SEARCH_ALLOWLIST || '')
+  const allowlistRootsCandidate =
+    inputAllowlistRoots && typeof inputAllowlistRoots === 'object' && !Array.isArray(inputAllowlistRoots)
+      ? inputAllowlistRoots.roots || inputAllowlistRoots.paths || ''
+      : inputAllowlistRoots;
+
+  const raw = Array.isArray(allowlistRootsCandidate)
+    ? allowlistRootsCandidate
+    : String(allowlistRootsCandidate || process.env.LOCAL_FILE_SEARCH_ALLOWLIST || '')
         .split(/[;,\n]/)
         .map((item) => item.trim())
         .filter(Boolean);
@@ -103,9 +126,15 @@ function openInExplorer(filePath) {
 }
 
 async function execute(input = {}, logger) {
-  const filePathInput = String(input.filePath || input.path || '').trim();
-  const openExplorer = parseBoolean(input.openExplorer, true);
-  const allowlist = getAllowlistRoots(input.allowlistRoots);
+  const normalized = normalizeInput(input);
+  const filePathInput =
+    asTrimmedString(normalized.filePath) ||
+    asTrimmedString(normalized.path) ||
+    asTrimmedString(normalized.filepath) ||
+    asTrimmedString(normalized.targetPath) ||
+    asTrimmedString(normalized.target);
+  const openExplorer = parseBoolean(normalized.openExplorer, true);
+  const allowlist = getAllowlistRoots(normalized.allowlistRoots);
 
   if (!filePathInput) {
     return {
@@ -202,7 +231,15 @@ async function execute(input = {}, logger) {
 }
 
 async function handler({ input, logger } = {}) {
-  return execute(input || {}, logger);
+  if (arguments.length > 1) {
+    return execute(normalizeInput(arguments[0]), arguments[1]);
+  }
+
+  if (input !== undefined || logger !== undefined) {
+    return execute(normalizeInput(input), logger);
+  }
+
+  return execute(normalizeInput(arguments[0]), undefined);
 }
 
 // Export in multiple CJS-compatible shapes so different runtimes can load this
