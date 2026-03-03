@@ -1,8 +1,9 @@
 {
   "hubId": "local_file_open",
   "active": true,
+  "imported": true,
   "name": "local_file_open",
-  "version": "1.6.1",
+  "version": "2.0.0",
   "description": "Open a provided local file path in Windows Explorer with allowlist validation and path safety checks.",
   "author": "AnythingllmSkills",
   "license": "MIT",
@@ -13,6 +14,25 @@
         "filePath": "C:\\Users\\USER\\Downloads\\gpt-oss-20b-modelfile.txt",
         "openExplorer": true
       }
+    },
+    {
+      "prompt": "Open the file C:\\Projects\\report.docx in Explorer",
+      "call": {
+        "filePath": "C:\\Projects\\report.docx"
+      }
+    },
+    {
+      "prompt": "Show me where this file is: D:\\Data\\output.csv",
+      "call": {
+        "filePath": "D:\\Data\\output.csv"
+      }
+    },
+    {
+      "prompt": "幫我打開這個路徑 C:\\Users\\USER\\Desktop\\notes.txt",
+      "call": {
+        "filePath": "C:\\Users\\USER\\Desktop\\notes.txt",
+        "openExplorer": true
+      }
     }
   ],
   "setup_args": {},
@@ -21,19 +41,19 @@
     "params": {
       "filePath": {
         "type": "string",
-        "description": "Required. Absolute or relative local file path to validate and open in Windows Explorer."
+        "description": "Required. Absolute local file path to validate and open in Windows Explorer."
       },
       "path": {
         "type": "string",
-        "description": "Alias of filePath for compatibility with MCP tool calls."
+        "description": "Alias of filePath for compatibility."
       },
       "openExplorer": {
         "type": "boolean",
-        "description": "Optional. Defaults to true. Set false to only validate path and allowlist without opening Explorer."
+        "description": "Optional. Defaults to true. Set false to only validate path without opening Explorer."
       },
       "allowlistRoots": {
         "type": "array",
-        "description": "Optional allowlist root paths. If omitted, LOCAL_FILE_SEARCH_ALLOWLIST is used when available."
+        "description": "Optional allowlist root paths. If omitted, LOCAL_FILE_SEARCH_ALLOWLIST env var is used when available."
       }
     }
   }
