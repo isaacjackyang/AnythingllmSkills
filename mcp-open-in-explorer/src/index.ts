@@ -68,15 +68,31 @@ async function main(): Promise<string> {
         name: "open-in-explorer",
         version: "0.1.0",
     });
-    server.tool("open_local_file", "Open Windows Explorer and select a file or folder path. This tool only supports allowlisted roots.", {
+    const openToolDescription = "Open Windows Explorer and select a file or folder path. This tool only supports allowlisted roots.";
+    const openToolSchema = {
         path: z.string().min(1).describe("Windows file/folder path to select in Explorer."),
-    }, async ({ path: rawPath }) => {
+    };
+    // Keep the original tool name for backward compatibility.
+    server.tool("open_local_file", openToolDescription, openToolSchema, async ({ path: rawPath }) => {
         const safePath = assertWithinRoots(rawPath, allowRoots);
         await openInExplorerSelect(safePath);
         return {
             content: [
                 {
-                    type: "text",
+                    type: "text" as const,
+                    text: `OK: opened Explorer and selected: ${safePath}`,
+                },
+            ],
+        };
+    });
+    // Add local_file_open alias for MCP clients expecting this name.
+    server.tool("local_file_open", openToolDescription, openToolSchema, async ({ path: rawPath }) => {
+        const safePath = assertWithinRoots(rawPath, allowRoots);
+        await openInExplorerSelect(safePath);
+        return {
+            content: [
+                {
+                    type: "text" as const,
                     text: `OK: opened Explorer and selected: ${safePath}`,
                 },
             ],
@@ -84,7 +100,7 @@ async function main(): Promise<string> {
     });
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error(`local-file MCP server ready. allowRoots=${JSON.stringify(allowRoots)}`);
+    console.error(`local-file MCP server ready. tools=[open_local_file, local_file_open] allowRoots=${JSON.stringify(allowRoots)}`);
     return "";
 }
 main().catch((error): string => {
