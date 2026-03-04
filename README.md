@@ -14,6 +14,7 @@
 - `anythingllm-skills/local_file_open/`：可直接放入 AnythingLLM 的 skill 範例，工具名稱統一為 `local_file_open`（本機檔案開啟/定位工具；搜尋由 MCP server 負責）。
 - `anythingllm-skills/win_*`：第一批 Windows 原子技能（read-only）：`win_fs_list`、`win_fs_read_text`、`win_process_list`、`win_service_status`、`win_registry_get`。
 - `mcp-open-in-explorer/`：Windows-only MCP server，只做 `open_local_file({ path })`。
+- `anythingllm-skills/anythingllm_mcp_servers.json`：AnythingLLM 可直接匯入的 MCP server 設定範本（已含 `filesystem` 與 `windows-mcp`）。
 
 另外：
 
