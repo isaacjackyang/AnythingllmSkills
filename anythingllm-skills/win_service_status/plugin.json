@@ -1,0 +1,23 @@
+{
+  "active": false,
+  "hubId": "win_service_status",
+  "name": "win_service_status",
+  "schema": "skill-1.0.0",
+  "version": "0.1.0",
+  "description": "Read-only query Windows service state/start mode.",
+  "author": "AnythingllmSkills",
+  "license": "MIT",
+  "examples": [
+    {
+      "prompt": "查看 Spooler 服務狀態",
+      "call": "{\"serviceName\":\"Spooler\"}"
+    }
+  ],
+  "entrypoint": {
+    "file": "handler.js",
+    "params": {
+      "serviceName": { "type": "string", "description": "Windows service name, e.g. Spooler." },
+      "timeoutMs": { "type": "number", "description": "PowerShell timeout in ms." }
+    }
+  }
+}

@@ -12,6 +12,7 @@
 - `gateway/`：核心後端（Node + TypeScript），負責事件路由、policy、tasks、channel control。
 - `gateway/web/approval_ui/`：Gateway 內建的審批/控制 UI（靜態頁）。
 - `anythingllm-skills/local_file_open/`：可直接放入 AnythingLLM 的 skill 範例，工具名稱統一為 `local_file_open`（本機檔案開啟/定位工具；搜尋由 MCP server 負責）。
+- `anythingllm-skills/win_*`：第一批 Windows 原子技能（read-only）：`win_fs_list`、`win_fs_read_text`、`win_process_list`、`win_service_status`、`win_registry_get`。
 - `mcp-open-in-explorer/`：Windows-only MCP server，只做 `open_local_file({ path })`。
 
 另外：
@@ -368,6 +369,7 @@ Invoke-RestMethod http://localhost:8787/api/channels
 - 規格（含時序/效能治理）：`second-brain/specs/system-memory-architecture.md`
 - 排程 prompt：`second-brain/specs/scheduler-prompts.md`
 - OpenClaw 對齊差異分析：`second-brain/specs/openclaw-gap-analysis.md`
+- OpenClaw 原子化硬插件與 AnythingLLM 硬體 Skills 設計報告：`docs/skills/openclaw-atomic-plugin-audit-and-anythingllm-hardware-skills.md`
 
 建議先跑最小版本（MEMORY + daily memory + summaries），再擴充到 archive/research 與 QMD。
 

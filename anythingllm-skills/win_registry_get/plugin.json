@@ -1,0 +1,25 @@
+{
+  "active": false,
+  "hubId": "win_registry_get",
+  "name": "win_registry_get",
+  "schema": "skill-1.0.0",
+  "version": "0.1.0",
+  "description": "Read a Windows registry value in a typed JSON-string response.",
+  "author": "AnythingllmSkills",
+  "license": "MIT",
+  "examples": [
+    {
+      "prompt": "讀取 HKLM 下某個登錄值",
+      "call": "{\"hive\":\"HKLM\",\"keyPath\":\"SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\",\"valueName\":\"ProductName\"}"
+    }
+  ],
+  "entrypoint": {
+    "file": "handler.js",
+    "params": {
+      "hive": { "type": "string", "description": "Registry hive: HKLM/HKCU/HKCR/HKU/HKCC." },
+      "keyPath": { "type": "string", "description": "Registry key path under hive." },
+      "valueName": { "type": "string", "description": "Registry value name." },
+      "timeoutMs": { "type": "number", "description": "PowerShell timeout in ms." }
+    }
+  }
+}

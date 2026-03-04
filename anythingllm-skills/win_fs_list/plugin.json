@@ -1,0 +1,23 @@
+{
+  "active": false,
+  "hubId": "win_fs_list",
+  "name": "win_fs_list",
+  "schema": "skill-1.0.0",
+  "version": "0.1.0",
+  "description": "List files/directories under a target path with safe metadata-only output.",
+  "author": "AnythingllmSkills",
+  "license": "MIT",
+  "examples": [
+    {
+      "prompt": "列出 C:\\Windows\\Temp 底下的檔案",
+      "call": "{\"path\":\"C:\\\\Windows\\\\Temp\",\"maxItems\":50}"
+    }
+  ],
+  "entrypoint": {
+    "file": "handler.js",
+    "params": {
+      "path": { "type": "string", "description": "Absolute or relative path to list." },
+      "maxItems": { "type": "number", "description": "Max number of entries to return (1-500)." }
+    }
+  }
+}

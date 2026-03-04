@@ -1,0 +1,24 @@
+{
+  "active": false,
+  "hubId": "win_process_list",
+  "name": "win_process_list",
+  "schema": "skill-1.0.0",
+  "version": "0.1.0",
+  "description": "List running Windows processes with summary fields via PowerShell.",
+  "author": "AnythingllmSkills",
+  "license": "MIT",
+  "examples": [
+    {
+      "prompt": "列出前 20 個正在執行的 process",
+      "call": "{\"maxItems\":20,\"nameFilter\":\"\"}"
+    }
+  ],
+  "entrypoint": {
+    "file": "handler.js",
+    "params": {
+      "maxItems": { "type": "number", "description": "Max process rows (1-200)." },
+      "nameFilter": { "type": "string", "description": "Optional process name keyword filter." },
+      "timeoutMs": { "type": "number", "description": "Process execution timeout (1000-30000)." }
+    }
+  }
+}
