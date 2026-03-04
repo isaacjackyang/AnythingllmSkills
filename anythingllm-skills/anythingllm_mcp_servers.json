@@ -10,10 +10,11 @@
       ]
     },
     "windows-mcp": {
-      "command": "npx",
+      "command": "uvx",
       "args": [
-        "-y",
-        "github:CursorTouch/Windows-MCP"
+        "--from",
+        "git+https://github.com/CursorTouch/Windows-MCP",
+        "windows-mcp"
       ]
     }
   }
