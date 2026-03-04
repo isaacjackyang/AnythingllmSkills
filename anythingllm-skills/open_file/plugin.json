@@ -1,0 +1,26 @@
+{
+  "active": true,
+  "hubId": "open_file",
+  "name": "Open File",
+  "schema": "skill-1.0.0",
+  "version": "1.0.0",
+  "description": "使用系統預設的應用程式直接開啟指定的檔案。",
+  "author": "LocalUser",
+  "license": "MIT",
+  "setup_args": {},
+  "entrypoint": {
+    "file": "handler.js",
+    "params": {
+      "filePath": {
+        "type": "string",
+        "description": "要開啟的檔案絕對路徑 (例如：C:\\Users\\Desktop\\document.pdf)"
+      }
+    }
+  },
+  "examples": [
+    {
+      "prompt": "幫我打開這個檔案 C:\\Users\\Desktop\\test.txt",
+      "call": "{\"filePath\": \"C:\\\\Users\\\\Desktop\\\\test.txt\"}"
+    }
+  ]
+}

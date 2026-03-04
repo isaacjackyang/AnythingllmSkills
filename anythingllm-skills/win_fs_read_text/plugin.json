@@ -1,0 +1,24 @@
+{
+  "active": false,
+  "hubId": "win_fs_read_text",
+  "name": "win_fs_read_text",
+  "schema": "skill-1.0.0",
+  "version": "0.1.0",
+  "description": "Read text file content with byte cap to prevent context blow-up.",
+  "author": "AnythingllmSkills",
+  "license": "MIT",
+  "examples": [
+    {
+      "prompt": "讀取 C:\\temp\\notes.txt 前 8000 bytes",
+      "call": "{\"path\":\"C:\\\\temp\\\\notes.txt\",\"maxBytes\":8000,\"encoding\":\"utf8\"}"
+    }
+  ],
+  "entrypoint": {
+    "file": "handler.js",
+    "params": {
+      "path": { "type": "string", "description": "Path to text file." },
+      "encoding": { "type": "string", "description": "Text encoding, default utf8." },
+      "maxBytes": { "type": "number", "description": "Max bytes to read (1-1048576)." }
+    }
+  }
+}
