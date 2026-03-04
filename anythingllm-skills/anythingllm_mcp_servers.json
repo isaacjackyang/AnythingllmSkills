@@ -8,6 +8,13 @@
         "C:\\Users\\USER\\Downloads",
         "C:\\agent_sandbox"
       ]
+    },
+    "windows-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "github:CursorTouch/Windows-MCP"
+      ]
     }
   }
 }
